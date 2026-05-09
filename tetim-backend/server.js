@@ -851,25 +851,13 @@ app.post('/api/admin/products', authMiddleware, adminMiddleware, async (req, res
   }
 });
 
-app.patch('/api/admin/products/:id', authMiddleware, adminMiddleware, async (req, res) => {
+app.patch('/api/admin/products/:id/publish', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const {
-      external_id,
-      article,
-      name,
-      category,
-      price,
-      sizes,
-      stock,
-      image_url,
-      description,
-    } = req.body;
-
-    const existing = await get(`SELECT * FROM products WHERE id = ?`, [
+    const product = await get(`SELECT * FROM products WHERE id = ?`, [
       req.params.id,
     ]);
 
-    if (!existing) {
+    if (!product) {
       return res.status(404).json({
         message: 'Товар не найден',
       });
@@ -878,38 +866,20 @@ app.patch('/api/admin/products/:id', authMiddleware, adminMiddleware, async (req
     await run(
       `
       UPDATE products
-      SET
-        external_id = ?,
-        article = ?,
-        name = ?,
-        category = ?,
-        price = ?,
-        sizes = ?,
-        stock = ?,
-        image_url = ?,
-        description = ?
+      SET is_published = 1, moderation_status = 'approved'
       WHERE id = ?
       `,
-      [
-        external_id ?? existing.external_id,
-        article ?? existing.article,
-        name ?? existing.name,
-        category ?? existing.category,
-        price !== undefined ? Number(price) : existing.price,
-        sizes ?? existing.sizes,
-        stock !== undefined ? Number(stock) : existing.stock,
-        image_url ?? existing.image_url,
-        description ?? existing.description,
-        req.params.id,
-      ]
+      [req.params.id]
     );
 
     return res.json({
-      message: 'Товар изменён',
+      message: 'Товар опубликован',
     });
-  } catch {
+  } catch (error) {
+    console.error(error);
+
     return res.status(500).json({
-      message: 'Ошибка изменения товара',
+      message: 'Ошибка публикации товара',
     });
   }
 });
