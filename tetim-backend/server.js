@@ -1,99 +1,88 @@
-require('dotenv').config();
-
 const express = require('express');
 const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const sqlite3 = require('sqlite3').verbose();
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
-
-const { sendOrderToAmo } = require('./amocrm');
+const path = require('path');
 
 const app = express();
 
-const PORT = process.env.PORT || 4000;
-const JWT_SECRET = process.env.JWT_SECRET || 'tetim_secret_key';
+const PORT = 4000;
+const JWT_SECRET = 'tetim_secret_key_change_later';
+const ONE_C_API_KEY = 'tetim_1c_secret_key';
+
+const FRONTEND_URL = 'http://localhost:5175';
+const SERVER_URL = `http://localhost:${PORT}`;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 const uploadsDir = path.join(__dirname, 'uploads');
 
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 app.use('/uploads', express.static(uploadsDir));
 
-const storage = multer.diskStorage({
-  destination(req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename(req, file, cb) {
-    const ext = path.extname(file.originalname);
-    const name = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, name);
-  },
-});
-
-function fileFilter(req, file, cb) {
-  const allowedTypes = [
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/gif',
-    'video/mp4',
-    'video/webm',
-  ];
-
-  if (!allowedTypes.includes(file.mimetype)) {
-    cb(new Error('Можно загружать только изображения или видео'), false);
-    return;
-  }
-
-  cb(null, true);
-}
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 80 * 1024 * 1024,
-  },
-});
-
-const db = new sqlite3.Database('./data.db');
+const dbPath = path.join(__dirname, 'data.db');
+const db = new sqlite3.Database(dbPath);
 
 function run(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.run(sql, params, function (error) {
-      if (error) reject(error);
-      else resolve(this);
+    db.run(sql, params, function callback(error) {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve({
+        id: this.lastID,
+        changes: this.changes,
+      });
     });
   });
 }
 
 function get(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.get(sql, params, function (error, row) {
-      if (error) reject(error);
-      else resolve(row);
+    db.get(sql, params, (error, row) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(row);
     });
   });
 }
 
 function all(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.all(sql, params, function (error, rows) {
-      if (error) reject(error);
-      else resolve(rows);
+    db.all(sql, params, (error, rows) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(rows);
     });
   });
 }
 
-async function initDb() {
+async function addColumnIfNotExists(table, column, definition) {
+  const columns = await all(`PRAGMA table_info(${table})`);
+  const exists = columns.some((item) => item.name === column);
+
+  if (!exists) {
+    await run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+async function initDatabase() {
   await run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,14 +91,13 @@ async function initDb() {
       phone TEXT,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'user',
-      lastname TEXT,
-      birthday TEXT,
+      birth_date TEXT,
       gender TEXT,
       city TEXT,
       street TEXT,
       house TEXT,
-      flat TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      apartment TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
@@ -120,14 +108,29 @@ async function initDb() {
       article TEXT,
       name TEXT NOT NULL,
       category TEXT NOT NULL,
-      price INTEGER NOT NULL,
+      price REAL NOT NULL DEFAULT 0,
       sizes TEXT,
       stock INTEGER DEFAULT 0,
       image_url TEXT,
       description TEXT,
       is_published INTEGER DEFAULT 0,
       moderation_status TEXT DEFAULT 'draft',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS slides (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      subtitle TEXT,
+      image_url TEXT NOT NULL,
+      media_type TEXT DEFAULT 'image',
+      background_color TEXT DEFAULT '#111111',
+      sort_order INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
@@ -139,66 +142,113 @@ async function initDb() {
       phone TEXT,
       email TEXT,
       address TEXT,
-      delivery_type TEXT DEFAULT 'delivery',
       comment TEXT,
+      delivery_type TEXT DEFAULT 'pickup',
+      total_amount REAL DEFAULT 0,
       items_json TEXT,
-      total_amount INTEGER DEFAULT 0,
       status TEXT DEFAULT 'new',
-      amo_lead_id INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      amo_status TEXT DEFAULT 'not_sent',
+      one_c_status TEXT DEFAULT 'not_exported',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
   await run(`
-    CREATE TABLE IF NOT EXISTS slides (
+    CREATE TABLE IF NOT EXISTS custom_orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      subtitle TEXT,
-      image_url TEXT NOT NULL,
-      media_type TEXT DEFAULT 'image',
-      background_color TEXT DEFAULT '#d8c900',
-      sort_order INTEGER DEFAULT 0,
-      is_active INTEGER DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      user_id INTEGER,
+      customer_name TEXT,
+      phone TEXT,
+      email TEXT,
+      selected_items TEXT,
+      total_amount REAL DEFAULT 0,
+      comment TEXT,
+      status TEXT DEFAULT 'new',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  await run(`ALTER TABLE products ADD COLUMN external_id TEXT`).catch(() => {});
-  await run(`ALTER TABLE products ADD COLUMN article TEXT`).catch(() => {});
-  await run(`ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 0`).catch(() => {});
-  await run(`ALTER TABLE products ADD COLUMN is_published INTEGER DEFAULT 0`).catch(() => {});
-  await run(`ALTER TABLE products ADD COLUMN moderation_status TEXT DEFAULT 'draft'`).catch(() => {});
+  await addColumnIfNotExists('products', 'external_id', 'TEXT');
+  await addColumnIfNotExists('products', 'article', 'TEXT');
+  await addColumnIfNotExists('products', 'sizes', 'TEXT');
+  await addColumnIfNotExists('products', 'stock', 'INTEGER DEFAULT 0');
+  await addColumnIfNotExists('products', 'image_url', 'TEXT');
+  await addColumnIfNotExists('products', 'description', 'TEXT');
+  await addColumnIfNotExists('products', 'is_published', 'INTEGER DEFAULT 0');
+  await addColumnIfNotExists('products', 'moderation_status', "TEXT DEFAULT 'draft'");
+  await addColumnIfNotExists('products', 'updated_at', 'TEXT');
 
-  await run(`ALTER TABLE orders ADD COLUMN email TEXT`).catch(() => {});
-  await run(`ALTER TABLE orders ADD COLUMN address TEXT`).catch(() => {});
-  await run(`ALTER TABLE orders ADD COLUMN delivery_type TEXT DEFAULT 'delivery'`).catch(() => {});
-  await run(`ALTER TABLE orders ADD COLUMN comment TEXT`).catch(() => {});
-  await run(`ALTER TABLE orders ADD COLUMN items_json TEXT`).catch(() => {});
-  await run(`ALTER TABLE orders ADD COLUMN amo_lead_id INTEGER`).catch(() => {});
+  await addColumnIfNotExists('orders', 'delivery_type', "TEXT DEFAULT 'pickup'");
+  await addColumnIfNotExists('orders', 'amo_status', "TEXT DEFAULT 'not_sent'");
+  await addColumnIfNotExists('orders', 'one_c_status', "TEXT DEFAULT 'not_exported'");
 
-  await run(`ALTER TABLE slides ADD COLUMN media_type TEXT DEFAULT 'image'`).catch(() => {});
+  await seedAdmin();
+  await seedProducts();
+  await seedSlides();
+}
 
+async function seedAdmin() {
   const admin = await get(`SELECT * FROM users WHERE email = ?`, [
     'admin@tetim.ru',
   ]);
 
   if (!admin) {
-    const passwordHash = await bcrypt.hash('1234', 10);
+    const hash = await bcrypt.hash('1234', 10);
 
     await run(
       `
       INSERT INTO users (name, email, phone, password, role)
       VALUES (?, ?, ?, ?, ?)
       `,
-      ['Админ', 'admin@tetim.ru', '+79990600075', passwordHash, 'admin']
+      ['Админ', 'admin@tetim.ru', '+79990600075', hash, 'admin']
     );
+  }
+}
 
-    console.log('Админ создан: admin@tetim.ru / 1234');
+async function seedProducts() {
+  const countRow = await get(`SELECT COUNT(*) as count FROM products`);
+
+  if (countRow.count > 0) {
+    return;
   }
 
-  const products = await all(`SELECT * FROM products`);
+  const products = [
+    {
+      external_id: 'LOCAL-001',
+      article: 'HD-001',
+      name: 'Худи TETIM',
+      category: 'sweatshirts',
+      price: 3493,
+      sizes: 'S, M, L, XL',
+      stock: 10,
+      image_url: 'https://placehold.co/600x720?text=TETIM+HOODIE',
+      description: 'Удобное худи TETIM для города и спорта.',
+    },
+    {
+      external_id: 'LOCAL-002',
+      article: 'TS-001',
+      name: 'Футболка TETIM',
+      category: 'tshirts-longsleeves',
+      price: 1990,
+      sizes: 'S, M, L, XL',
+      stock: 20,
+      image_url: 'https://placehold.co/600x720?text=TETIM+TSHIRT',
+      description: 'Базовая футболка TETIM.',
+    },
+    {
+      external_id: 'LOCAL-003',
+      article: 'JK-001',
+      name: 'Куртка Outdoor',
+      category: 'jackets',
+      price: 5990,
+      sizes: 'S, M, L, XL',
+      stock: 5,
+      image_url: 'https://placehold.co/600x720?text=TETIM+JACKET',
+      description: 'Куртка для города и outdoor.',
+    },
+  ];
 
-  if (!products.length) {
+  for (const product of products) {
     await run(
       `
       INSERT INTO products (
@@ -212,97 +262,60 @@ async function initDb() {
         image_url,
         description,
         is_published,
-        moderation_status
+        moderation_status,
+        updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       `,
       [
-        'LOCAL-001',
-        'HD-001',
-        'Худи TETIM',
-        'hoodies',
-        3493,
-        'S, M, L, XL',
-        10,
-        'https://placehold.co/600x720?text=Hoodie',
-        'Удобное худи для города и спорта.',
+        product.external_id,
+        product.article,
+        product.name,
+        product.category,
+        product.price,
+        product.sizes,
+        product.stock,
+        product.image_url,
+        product.description,
         1,
         'approved',
       ]
     );
+  }
+}
 
-    await run(
-      `
-      INSERT INTO products (
-        external_id,
-        article,
-        name,
-        category,
-        price,
-        sizes,
-        stock,
-        image_url,
-        description,
-        is_published,
-        moderation_status
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        'LOCAL-002',
-        'TS-001',
-        'Футболка TETIM',
-        'tshirts',
-        1990,
-        'S, M, L',
-        20,
-        'https://placehold.co/600x720?text=T-Shirt',
-        'Базовая футболка на каждый день.',
-        1,
-        'approved',
-      ]
-    );
+async function seedSlides() {
+  const countRow = await get(`SELECT COUNT(*) as count FROM slides`);
 
-    await run(
-      `
-      INSERT INTO products (
-        external_id,
-        article,
-        name,
-        category,
-        price,
-        sizes,
-        stock,
-        image_url,
-        description,
-        is_published,
-        moderation_status
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        'LOCAL-003',
-        'JK-001',
-        'Куртка Outdoor',
-        'jackets',
-        5990,
-        'M, L, XL',
-        5,
-        'https://placehold.co/600x720?text=Jacket',
-        'Куртка для города и активного отдыха.',
-        1,
-        'approved',
-      ]
-    );
-
-    console.log('Стартовые товары добавлены');
+  if (countRow.count > 0) {
+    return;
   }
 
-  const slides = await all(`SELECT * FROM slides`);
+  const slides = [
+    {
+      title: 'Товар дня',
+      subtitle: 'Скидки на коллекцию TETIM',
+      image_url: 'https://placehold.co/800x1000/e5de00/111111?text=TETIM+SLIDE+1',
+      media_type: 'image',
+      sort_order: 1,
+    },
+    {
+      title: 'Новая коллекция',
+      subtitle: 'Одежда для города и спорта',
+      image_url: 'https://placehold.co/800x1000/111111/ffffff?text=TETIM+SLIDE+2',
+      media_type: 'image',
+      sort_order: 2,
+    },
+    {
+      title: 'Outdoor',
+      subtitle: 'Форма, куртки и комплекты',
+      image_url: 'https://placehold.co/800x1000/d29a34/111111?text=TETIM+SLIDE+3',
+      media_type: 'image',
+      sort_order: 3,
+    },
+  ];
 
-  if (slides.length < 3) {
-    await run(`DELETE FROM slides`);
-
+  for (const slide of slides) {
     await run(
       `
       INSERT INTO slides (
@@ -316,42 +329,16 @@ async function initDb() {
       )
       VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      ['TETIM', 'Новая коллекция', '/assets/afisha1.jpg', 'image', '#d8c900', 1, 1]
+      [
+        slide.title,
+        slide.subtitle,
+        slide.image_url,
+        slide.media_type,
+        '#111111',
+        slide.sort_order,
+        1,
+      ]
     );
-
-    await run(
-      `
-      INSERT INTO slides (
-        title,
-        subtitle,
-        image_url,
-        media_type,
-        background_color,
-        sort_order,
-        is_active
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      ['TETIM', 'Outdoor', '/assets/afisha2.jpg', 'image', '#4aa7d8', 2, 1]
-    );
-
-    await run(
-      `
-      INSERT INTO slides (
-        title,
-        subtitle,
-        image_url,
-        media_type,
-        background_color,
-        sort_order,
-        is_active
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      ['TETIM', 'Командная форма', '/assets/afisha3.jpg', 'image', '#d88422', 3, 1]
-    );
-
-    console.log('Стартовые слайды добавлены: 3 шт.');
   }
 }
 
@@ -359,21 +346,22 @@ function createToken(user) {
   return jwt.sign(
     {
       id: user.id,
+      email: user.email,
       role: user.role,
     },
     JWT_SECRET,
     {
-      expiresIn: '7d',
+      expiresIn: '30d',
     }
   );
 }
 
 function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
+  const authHeader = req.headers.authorization || '';
 
-  if (!authHeader) {
+  if (!authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
-      message: 'Нет токена',
+      message: 'Нет токена авторизации',
     });
   }
 
@@ -382,7 +370,7 @@ function authMiddleware(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
-    next();
+    return next();
   } catch {
     return res.status(401).json({
       message: 'Неверный токен',
@@ -390,34 +378,85 @@ function authMiddleware(req, res, next) {
   }
 }
 
+function optionalAuthMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+
+  if (!authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+  } catch {
+    req.user = null;
+  }
+
+  return next();
+}
+
 function adminMiddleware(req, res, next) {
-  if (req.user.role !== 'admin') {
+  if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({
-      message: 'Доступ только для админа',
+      message: 'Доступ только для администратора',
     });
   }
 
-  next();
+  return next();
 }
 
-function onecMiddleware(req, res, next) {
+function oneCMiddleware(req, res, next) {
   const apiKey = req.headers['x-1c-api-key'];
 
-  if (!apiKey || apiKey !== process.env.ONEC_API_KEY) {
+  if (apiKey !== ONE_C_API_KEY) {
     return res.status(401).json({
-      message: 'Нет доступа для 1С',
+      message: 'Неверный ключ 1С',
     });
   }
 
-  next();
+  return next();
 }
 
-async function getSlidesCount() {
-  const row = await get(`SELECT COUNT(*) as count FROM slides`);
-  return Number(row?.count || 0);
-}
+const storage = multer.diskStorage({
+  destination(req, file, callback) {
+    callback(null, uploadsDir);
+  },
 
-/* AUTH */
+  filename(req, file, callback) {
+    const safeOriginalName = Buffer.from(file.originalname, 'latin1')
+      .toString('utf8')
+      .replace(/[^\wа-яА-ЯёЁ.\-]/g, '_');
+
+    const uniqueName = `${Date.now()}-${Math.round(
+      Math.random() * 1e9
+    )}-${safeOriginalName}`;
+
+    callback(null, uniqueName);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 200 * 1024 * 1024,
+  },
+});
+
+/* =========================
+   HEALTH
+========================= */
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    message: 'Backend TETIM работает',
+    time: new Date().toISOString(),
+  });
+});
+
+/* =========================
+   AUTH
+========================= */
 
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -425,35 +464,42 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (!name || !email || !password) {
       return res.status(400).json({
-        message: 'Заполните имя, email и пароль',
+        message: 'Имя, email и пароль обязательны',
       });
     }
 
-    const existingUser = await get(`SELECT * FROM users WHERE email = ?`, [
-      email,
-    ]);
+    const existing = await get(`SELECT * FROM users WHERE email = ?`, [email]);
 
-    if (existingUser) {
+    if (existing) {
       return res.status(400).json({
         message: 'Пользователь с таким email уже существует',
       });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 10);
 
-    await run(
+    const result = await run(
       `
       INSERT INTO users (name, email, phone, password, role)
       VALUES (?, ?, ?, ?, ?)
       `,
-      [name, email, phone || '', passwordHash, 'user']
+      [name, email, phone || '', hash, 'user']
     );
 
+    const user = await get(
+      `SELECT id, name, email, phone, role FROM users WHERE id = ?`,
+      [result.id]
+    );
+
+    const token = createToken(user);
+
     return res.json({
-      message: 'Аккаунт создан',
+      message: 'Регистрация успешна',
+      token,
+      user,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Ошибка регистрации:', error);
 
     return res.status(500).json({
       message: 'Ошибка регистрации',
@@ -468,33 +514,42 @@ app.post('/api/auth/login', async (req, res) => {
     const user = await get(`SELECT * FROM users WHERE email = ?`, [email]);
 
     if (!user) {
-      return res.status(400).json({
+      return res.status(401).json({
         message: 'Неверный email или пароль',
       });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
-    if (!isPasswordCorrect) {
-      return res.status(400).json({
+    if (!isPasswordValid) {
+      return res.status(401).json({
         message: 'Неверный email или пароль',
       });
     }
 
-    const token = createToken(user);
+    const safeUser = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      birth_date: user.birth_date,
+      gender: user.gender,
+      city: user.city,
+      street: user.street,
+      house: user.house,
+      apartment: user.apartment,
+    };
+
+    const token = createToken(safeUser);
 
     return res.json({
+      message: 'Вход выполнен',
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-      },
+      user: safeUser,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Ошибка входа:', error);
 
     return res.status(500).json({
       message: 'Ошибка входа',
@@ -502,13 +557,22 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-/* ACCOUNT */
-
-app.get('/api/account/me', authMiddleware, async (req, res) => {
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const user = await get(
       `
-      SELECT id, name, lastname, email, phone, role, birthday, gender, city, street, house, flat
+      SELECT
+        id,
+        name,
+        email,
+        phone,
+        role,
+        birth_date,
+        gender,
+        city,
+        street,
+        house,
+        apartment
       FROM users
       WHERE id = ?
       `,
@@ -521,125 +585,185 @@ app.get('/api/account/me', authMiddleware, async (req, res) => {
       });
     }
 
-    return res.json({ user });
+    return res.json({
+      user,
+    });
   } catch {
     return res.status(500).json({
-      message: 'Ошибка загрузки профиля',
+      message: 'Ошибка получения профиля',
     });
   }
 });
 
-app.get('/api/account/orders', authMiddleware, async (req, res) => {
+app.patch('/api/auth/profile', authMiddleware, async (req, res) => {
   try {
-    const orders = await all(
+    const {
+      name,
+      phone,
+      birth_date,
+      gender,
+      city,
+      street,
+      house,
+      apartment,
+    } = req.body;
+
+    await run(
       `
-      SELECT *
-      FROM orders
-      WHERE user_id = ?
-      ORDER BY id DESC
+      UPDATE users
+      SET
+        name = ?,
+        phone = ?,
+        birth_date = ?,
+        gender = ?,
+        city = ?,
+        street = ?,
+        house = ?,
+        apartment = ?
+      WHERE id = ?
+      `,
+      [
+        name || '',
+        phone || '',
+        birth_date || '',
+        gender || '',
+        city || '',
+        street || '',
+        house || '',
+        apartment || '',
+        req.user.id,
+      ]
+    );
+
+    const user = await get(
+      `
+      SELECT
+        id,
+        name,
+        email,
+        phone,
+        role,
+        birth_date,
+        gender,
+        city,
+        street,
+        house,
+        apartment
+      FROM users
+      WHERE id = ?
       `,
       [req.user.id]
     );
 
-    const normalizedOrders = orders.map((order) => ({
-      ...order,
-      items: JSON.parse(order.items_json || '[]'),
-    }));
+    return res.json({
+      message: 'Профиль сохранён',
+      user,
+    });
+  } catch (error) {
+    console.error('Ошибка сохранения профиля:', error);
 
-    return res.json({ orders: normalizedOrders });
-  } catch {
     return res.status(500).json({
-      message: 'Ошибка загрузки заказов',
+      message: 'Ошибка сохранения профиля',
     });
   }
 });
 
-/* PUBLIC */
+/* =========================
+   PUBLIC
+========================= */
 
 app.get('/api/public/products', async (req, res) => {
   try {
-    const search = String(req.query.search || '').toLowerCase();
-
-    let products = await all(`
+    const products = await all(
+      `
       SELECT *
       FROM products
       WHERE is_published = 1
       ORDER BY id DESC
-    `);
+      `
+    );
 
-    if (search) {
-      products = products.filter((product) => {
-        return (
-          String(product.name || '').toLowerCase().includes(search) ||
-          String(product.description || '').toLowerCase().includes(search) ||
-          String(product.category || '').toLowerCase().includes(search) ||
-          String(product.article || '').toLowerCase().includes(search)
-        );
+    return res.json({
+      products,
+    });
+  } catch (error) {
+    console.error('Ошибка получения товаров:', error);
+
+    return res.status(500).json({
+      message: 'Ошибка получения товаров',
+    });
+  }
+});
+
+app.get('/api/public/products/:id', async (req, res) => {
+  try {
+    const product = await get(
+      `
+      SELECT *
+      FROM products
+      WHERE id = ? AND is_published = 1
+      `,
+      [req.params.id]
+    );
+
+    if (!product) {
+      return res.status(404).json({
+        message: 'Товар не найден',
       });
     }
 
-    return res.json({ products });
+    return res.json({
+      product,
+    });
   } catch {
     return res.status(500).json({
-      message: 'Ошибка загрузки товаров',
+      message: 'Ошибка получения товара',
     });
   }
 });
 
 app.get('/api/public/slides', async (req, res) => {
   try {
-    const slides = await all(`
+    const slides = await all(
+      `
       SELECT *
       FROM slides
       WHERE is_active = 1
       ORDER BY sort_order ASC, id ASC
-      LIMIT 10
-    `);
+      `
+    );
 
-    return res.json({ slides });
+    return res.json({
+      slides,
+    });
   } catch {
     return res.status(500).json({
-      message: 'Ошибка загрузки слайдов',
+      message: 'Ошибка получения слайдов',
     });
   }
 });
 
-/* ORDERS */
+/* =========================
+   ORDERS
+========================= */
 
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', optionalAuthMiddleware, async (req, res) => {
   try {
-    const { customer, items, total, deliveryType, address, comment } = req.body;
+    const {
+      customer_name,
+      phone,
+      email,
+      address,
+      comment,
+      delivery_type,
+      total_amount,
+      items,
+    } = req.body;
 
-    if (!customer?.name || !customer?.phone) {
+    if (!customer_name || !phone) {
       return res.status(400).json({
-        message: 'Введите имя и телефон',
+        message: 'Имя и телефон обязательны',
       });
-    }
-
-    if (!items || !items.length) {
-      return res.status(400).json({
-        message: 'Корзина пуста',
-      });
-    }
-
-    if (deliveryType === 'delivery' && !address) {
-      return res.status(400).json({
-        message: 'Введите адрес доставки',
-      });
-    }
-
-    let userId = null;
-
-    const authHeader = req.headers.authorization;
-
-    if (authHeader) {
-      try {
-        const token = authHeader.replace('Bearer ', '');
-        const decoded = jwt.verify(token, JWT_SECRET);
-        userId = decoded.id;
-      } catch {
-        userId = null;
-      }
     }
 
     const result = await run(
@@ -650,71 +774,124 @@ app.post('/api/orders', async (req, res) => {
         phone,
         email,
         address,
-        delivery_type,
         comment,
-        items_json,
+        delivery_type,
         total_amount,
-        status
+        items_json,
+        status,
+        amo_status,
+        one_c_status
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
-        userId,
-        customer.name,
-        customer.phone,
-        customer.email || '',
+        req.user?.id || null,
+        customer_name,
+        phone,
+        email || '',
         address || '',
-        deliveryType || 'delivery',
         comment || '',
-        JSON.stringify(items),
-        Number(total || 0),
+        delivery_type || 'pickup',
+        Number(total_amount || 0),
+        JSON.stringify(items || []),
         'new',
+        'not_sent',
+        'not_exported',
       ]
     );
 
-    const order = {
-      id: result.lastID,
-      customer,
-      items,
-      total,
-      deliveryType,
-      address,
-      comment,
-    };
-
-    let amo = null;
-
-    try {
-      amo = await sendOrderToAmo(order);
-
-      if (amo?.leadId) {
-        await run(`UPDATE orders SET amo_lead_id = ? WHERE id = ?`, [
-          amo.leadId,
-          result.lastID,
-        ]);
-      }
-    } catch (amoError) {
-      console.error(
-        'Заказ сохранён, но amoCRM не приняла заявку:',
-        amoError.message
-      );
-    }
-
     return res.json({
       message: 'Заказ оформлен',
-      orderId: result.lastID,
-      amo,
+      order_id: result.id,
     });
   } catch (error) {
-    console.error(error);
+    console.error('Ошибка создания заказа:', error);
 
     return res.status(500).json({
-      message: 'Ошибка оформления заказа',
+      message: 'Ошибка создания заказа',
     });
   }
 });
 
-/* ADMIN UPLOAD */
+app.post('/api/custom-orders', optionalAuthMiddleware, async (req, res) => {
+  try {
+    const {
+      customer_name,
+      phone,
+      email,
+      selected_items,
+      total_amount,
+      comment,
+    } = req.body;
+
+    if (!customer_name || !phone) {
+      return res.status(400).json({
+        message: 'Имя и телефон обязательны',
+      });
+    }
+
+    const result = await run(
+      `
+      INSERT INTO custom_orders (
+        user_id,
+        customer_name,
+        phone,
+        email,
+        selected_items,
+        total_amount,
+        comment,
+        status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        req.user?.id || null,
+        customer_name,
+        phone,
+        email || '',
+        JSON.stringify(selected_items || []),
+        Number(total_amount || 0),
+        comment || '',
+        'new',
+      ]
+    );
+
+    return res.json({
+      message: 'Заявка отправлена',
+      custom_order_id: result.id,
+    });
+  } catch (error) {
+    console.error('Ошибка создания заявки:', error);
+
+    return res.status(500).json({
+      message: 'Ошибка создания заявки',
+    });
+  }
+});
+
+/* =========================
+   ADMIN COMMON
+========================= */
+
+app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const users = await all(
+      `
+      SELECT id, name, email, phone, role, created_at
+      FROM users
+      ORDER BY id DESC
+      `
+    );
+
+    return res.json({
+      users,
+    });
+  } catch {
+    return res.status(500).json({
+      message: 'Ошибка получения пользователей',
+    });
+  }
+});
 
 app.post(
   '/api/admin/upload',
@@ -729,19 +906,18 @@ app.post(
         });
       }
 
-      const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
-
-      const mediaType = req.file.mimetype.startsWith('video/')
-        ? 'video'
-        : 'image';
+      const isVideo = req.file.mimetype.startsWith('video/');
+      const mediaType = isVideo ? 'video' : 'image';
+      const url = `${SERVER_URL}/uploads/${req.file.filename}`;
 
       return res.json({
         message: 'Файл загружен',
-        url: fileUrl,
+        url,
         media_type: mediaType,
+        filename: req.file.filename,
       });
     } catch (error) {
-      console.error(error);
+      console.error('Ошибка загрузки файла:', error);
 
       return res.status(500).json({
         message: 'Ошибка загрузки файла',
@@ -750,65 +926,44 @@ app.post(
   }
 );
 
-/* ADMIN USERS */
+/* =========================
+   ADMIN PRODUCTS
+========================= */
 
-app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const users = await all(`
-      SELECT id, name, email, phone, role, created_at
-      FROM users
-      ORDER BY id DESC
-    `);
+app.get(
+  '/api/admin/products',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const products = await all(
+        `
+        SELECT *
+        FROM products
+        ORDER BY id DESC
+        `
+      );
 
-    return res.json({ users });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка загрузки пользователей',
-    });
-  }
-});
+      return res.json({
+        products,
+      });
+    } catch (error) {
+      console.error('Ошибка получения товаров админом:', error);
 
-/* ADMIN PRODUCTS */
-
-app.get('/api/admin/products', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const products = await all(`
-      SELECT *
-      FROM products
-      ORDER BY id DESC
-    `);
-
-    return res.json({ products });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка загрузки товаров',
-    });
-  }
-});
-
-app.post('/api/admin/products', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const {
-      external_id,
-      article,
-      name,
-      category,
-      price,
-      sizes,
-      stock,
-      image_url,
-      description,
-    } = req.body;
-
-    if (!name || !category || !price) {
-      return res.status(400).json({
-        message: 'Введите название, категорию и цену',
+      return res.status(500).json({
+        message: 'Ошибка получения товаров',
       });
     }
+  }
+);
 
-    const result = await run(
-      `
-      INSERT INTO products (
+app.post(
+  '/api/admin/products',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const {
         external_id,
         article,
         name,
@@ -818,429 +973,475 @@ app.post('/api/admin/products', authMiddleware, adminMiddleware, async (req, res
         stock,
         image_url,
         description,
-        is_published,
-        moderation_status
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        external_id || '',
-        article || '',
+      } = req.body;
+
+      if (!name || !category || !price) {
+        return res.status(400).json({
+          message: 'Название, категория и цена обязательны',
+        });
+      }
+
+      const result = await run(
+        `
+        INSERT INTO products (
+          external_id,
+          article,
+          name,
+          category,
+          price,
+          sizes,
+          stock,
+          image_url,
+          description,
+          is_published,
+          moderation_status,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `,
+        [
+          external_id || '',
+          article || '',
+          name,
+          category,
+          Number(price),
+          sizes || '',
+          Number(stock || 0),
+          image_url || '',
+          description || '',
+          0,
+          'draft',
+        ]
+      );
+
+      return res.json({
+        message: 'Товар добавлен',
+        id: result.id,
+      });
+    } catch (error) {
+      console.error('Ошибка добавления товара:', error);
+
+      return res.status(500).json({
+        message: 'Ошибка добавления товара',
+      });
+    }
+  }
+);
+
+app.patch(
+  '/api/admin/products/:id',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const productId = req.params.id;
+
+      const existing = await get(`SELECT * FROM products WHERE id = ?`, [
+        productId,
+      ]);
+
+      if (!existing) {
+        return res.status(404).json({
+          message: 'Товар не найден',
+        });
+      }
+
+      const {
+        external_id,
+        article,
         name,
         category,
-        Number(price),
-        sizes || '',
-        Number(stock || 0),
-        image_url || '',
-        description || '',
-        0,
-        'draft',
-      ]
-    );
+        price,
+        sizes,
+        stock,
+        image_url,
+        description,
+      } = req.body;
 
-    return res.json({
-      message: 'Товар добавлен',
-      productId: result.lastID,
-    });
-  } catch (error) {
-    console.error(error);
+      if (!name || !category || !price) {
+        return res.status(400).json({
+          message: 'Название, категория и цена обязательны',
+        });
+      }
 
-    return res.status(500).json({
-      message: 'Ошибка добавления товара',
-    });
-  }
-});
+      await run(
+        `
+        UPDATE products
+        SET
+          external_id = ?,
+          article = ?,
+          name = ?,
+          category = ?,
+          price = ?,
+          sizes = ?,
+          stock = ?,
+          image_url = ?,
+          description = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        `,
+        [
+          external_id || '',
+          article || '',
+          name,
+          category,
+          Number(price),
+          sizes || '',
+          Number(stock || 0),
+          image_url || '',
+          description || '',
+          productId,
+        ]
+      );
 
-app.patch('/api/admin/products/:id/publish', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const product = await get(`SELECT * FROM products WHERE id = ?`, [
-      req.params.id,
-    ]);
+      return res.json({
+        message: 'Товар сохранён',
+      });
+    } catch (error) {
+      console.error('Ошибка изменения товара:', error);
 
-    if (!product) {
-      return res.status(404).json({
-        message: 'Товар не найден',
+      return res.status(500).json({
+        message: 'Ошибка изменения товара',
       });
     }
-
-    await run(
-      `
-      UPDATE products
-      SET is_published = 1, moderation_status = 'approved'
-      WHERE id = ?
-      `,
-      [req.params.id]
-    );
-
-    return res.json({
-      message: 'Товар опубликован',
-    });
-  } catch (error) {
-    console.error(error);
-
-    return res.status(500).json({
-      message: 'Ошибка публикации товара',
-    });
   }
-});
+);
 
-app.patch('/api/admin/products/:id/photo', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const { image_url } = req.body;
+app.patch(
+  '/api/admin/products/:id/photo',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const { image_url } = req.body;
 
-    if (!image_url) {
-      return res.status(400).json({
-        message: 'Передайте ссылку на фото',
+      if (!image_url) {
+        return res.status(400).json({
+          message: 'Ссылка на фото обязательна',
+        });
+      }
+
+      await run(
+        `
+        UPDATE products
+        SET image_url = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        `,
+        [image_url, req.params.id]
+      );
+
+      return res.json({
+        message: 'Фото товара обновлено',
+      });
+    } catch {
+      return res.status(500).json({
+        message: 'Ошибка обновления фото',
       });
     }
-
-    await run(
-      `
-      UPDATE products
-      SET image_url = ?
-      WHERE id = ?
-      `,
-      [image_url, req.params.id]
-    );
-
-    return res.json({
-      message: 'Фото товара обновлено',
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка обновления фото',
-    });
   }
-});
+);
 
-app.patch('/api/admin/products/:id/publish', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const product = await get(`SELECT * FROM products WHERE id = ?`, [
-      req.params.id,
-    ]);
+app.patch(
+  '/api/admin/products/:id/publish',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const product = await get(`SELECT * FROM products WHERE id = ?`, [
+        req.params.id,
+      ]);
 
-    if (!product) {
-      return res.status(404).json({
-        message: 'Товар не найден',
+      if (!product) {
+        return res.status(404).json({
+          message: 'Товар не найден',
+        });
+      }
+
+      if (!product.image_url) {
+        return res.status(400).json({
+          message: 'Перед публикацией нужно добавить фото товара',
+        });
+      }
+
+      await run(
+        `
+        UPDATE products
+        SET
+          is_published = 1,
+          moderation_status = 'approved',
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        `,
+        [req.params.id]
+      );
+
+      return res.json({
+        message: 'Товар опубликован',
+      });
+    } catch (error) {
+      console.error('Ошибка публикации товара:', error);
+
+      return res.status(500).json({
+        message: 'Ошибка публикации товара',
       });
     }
+  }
+);
 
-    if (!product.image_url) {
-      return res.status(400).json({
-        message: 'Перед публикацией нужно добавить фото товара',
+app.patch(
+  '/api/admin/products/:id/unpublish',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      await run(
+        `
+        UPDATE products
+        SET
+          is_published = 0,
+          moderation_status = 'draft',
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        `,
+        [req.params.id]
+      );
+
+      return res.json({
+        message: 'Товар снят с публикации',
+      });
+    } catch {
+      return res.status(500).json({
+        message: 'Ошибка снятия товара',
       });
     }
-
-    await run(
-      `
-      UPDATE products
-      SET is_published = 1, moderation_status = 'approved'
-      WHERE id = ?
-      `,
-      [req.params.id]
-    );
-
-    return res.json({
-      message: 'Товар опубликован',
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка публикации товара',
-    });
   }
-});
+);
 
-app.patch('/api/admin/products/:id/unpublish', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    await run(
-      `
-      UPDATE products
-      SET is_published = 0, moderation_status = 'draft'
-      WHERE id = ?
-      `,
-      [req.params.id]
-    );
+app.delete(
+  '/api/admin/products/:id',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      await run(`DELETE FROM products WHERE id = ?`, [req.params.id]);
 
-    return res.json({
-      message: 'Товар снят с публикации',
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка снятия товара с публикации',
-    });
-  }
-});
-
-app.delete('/api/admin/products/:id', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    await run(`DELETE FROM products WHERE id = ?`, [req.params.id]);
-
-    return res.json({
-      message: 'Товар удалён',
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка удаления товара',
-    });
-  }
-});
-
-/* ADMIN ORDERS */
-
-app.get('/api/admin/orders', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const orders = await all(`
-      SELECT *
-      FROM orders
-      ORDER BY id DESC
-    `);
-
-    const normalizedOrders = orders.map((order) => ({
-      ...order,
-      items: JSON.parse(order.items_json || '[]'),
-    }));
-
-    return res.json({ orders: normalizedOrders });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка загрузки заказов',
-    });
-  }
-});
-
-app.patch('/api/admin/orders/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    await run(`UPDATE orders SET status = ? WHERE id = ?`, [
-      status,
-      req.params.id,
-    ]);
-
-    return res.json({
-      message: 'Статус изменён',
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка изменения статуса',
-    });
-  }
-});
-
-/* ADMIN SLIDES */
-
-app.get('/api/admin/slides', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const slides = await all(`
-      SELECT *
-      FROM slides
-      ORDER BY sort_order ASC, id ASC
-    `);
-
-    return res.json({
-      slides,
-      rules: {
-        min: 3,
-        max: 10,
-        maxVideoSeconds: 60,
-      },
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка загрузки слайдов',
-    });
-  }
-});
-
-app.post('/api/admin/slides', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const slidesCount = await getSlidesCount();
-
-    if (slidesCount >= 10) {
-      return res.status(400).json({
-        message: 'Нельзя добавить больше 10 слайдов',
+      return res.json({
+        message: 'Товар удалён',
+      });
+    } catch {
+      return res.status(500).json({
+        message: 'Ошибка удаления товара',
       });
     }
+  }
+);
 
-    const {
-      title,
-      subtitle,
-      image_url,
-      media_type,
-      background_color,
-      sort_order,
-      is_active,
-    } = req.body;
+/* =========================
+   ADMIN SLIDES
+========================= */
 
-    if (!image_url) {
-      return res.status(400).json({
-        message: 'Добавьте ссылку на изображение или видео',
+app.get(
+  '/api/admin/slides',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const slides = await all(
+        `
+        SELECT *
+        FROM slides
+        ORDER BY sort_order ASC, id ASC
+        `
+      );
+
+      return res.json({
+        slides,
+      });
+    } catch {
+      return res.status(500).json({
+        message: 'Ошибка получения слайдов',
       });
     }
+  }
+);
 
-    if (!['image', 'video'].includes(media_type || 'image')) {
-      return res.status(400).json({
-        message: 'Тип слайда должен быть image или video',
-      });
-    }
-
-    const result = await run(
-      `
-      INSERT INTO slides (
+app.post(
+  '/api/admin/slides',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const {
         title,
         subtitle,
         image_url,
         media_type,
         background_color,
         sort_order,
-        is_active
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        title || '',
-        subtitle || '',
-        image_url,
-        media_type || 'image',
-        background_color || '#d8c900',
-        Number(sort_order || 0),
-        is_active ? 1 : 0,
-      ]
-    );
+        is_active,
+      } = req.body;
 
-    return res.json({
-      message: 'Слайд добавлен',
-      slideId: result.lastID,
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка добавления слайда',
-    });
-  }
-});
+      if (!image_url) {
+        return res.status(400).json({
+          message: 'Нужно загрузить фото или видео',
+        });
+      }
 
-app.patch('/api/admin/slides/:id', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const existing = await get(`SELECT * FROM slides WHERE id = ?`, [
-      req.params.id,
-    ]);
+      const countRow = await get(`SELECT COUNT(*) as count FROM slides`);
 
-    if (!existing) {
-      return res.status(404).json({
-        message: 'Слайд не найден',
+      if (countRow.count >= 10) {
+        return res.status(400).json({
+          message: 'Нельзя добавить больше 10 слайдов',
+        });
+      }
+
+      const result = await run(
+        `
+        INSERT INTO slides (
+          title,
+          subtitle,
+          image_url,
+          media_type,
+          background_color,
+          sort_order,
+          is_active
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          title || '',
+          subtitle || '',
+          image_url,
+          media_type || 'image',
+          background_color || '#111111',
+          Number(sort_order || 0),
+          is_active === false ? 0 : 1,
+        ]
+      );
+
+      return res.json({
+        message: 'Слайд добавлен',
+        id: result.id,
+      });
+    } catch (error) {
+      console.error('Ошибка добавления слайда:', error);
+
+      return res.status(500).json({
+        message: 'Ошибка добавления слайда',
       });
     }
+  }
+);
 
-    const {
-      title,
-      subtitle,
-      image_url,
-      media_type,
-      background_color,
-      sort_order,
-      is_active,
-    } = req.body;
+app.delete(
+  '/api/admin/slides/:id',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const countRow = await get(`SELECT COUNT(*) as count FROM slides`);
 
-    await run(
-      `
-      UPDATE slides
-      SET
-        title = ?,
-        subtitle = ?,
-        image_url = ?,
-        media_type = ?,
-        background_color = ?,
-        sort_order = ?,
-        is_active = ?
-      WHERE id = ?
-      `,
-      [
-        title ?? existing.title,
-        subtitle ?? existing.subtitle,
-        image_url ?? existing.image_url,
-        media_type ?? existing.media_type,
-        background_color ?? existing.background_color,
-        sort_order !== undefined ? Number(sort_order) : existing.sort_order,
-        is_active !== undefined ? Number(is_active) : existing.is_active,
+      if (countRow.count <= 3) {
+        return res.status(400).json({
+          message: 'Нельзя оставить меньше 3 слайдов',
+        });
+      }
+
+      await run(`DELETE FROM slides WHERE id = ?`, [req.params.id]);
+
+      return res.json({
+        message: 'Слайд удалён',
+      });
+    } catch {
+      return res.status(500).json({
+        message: 'Ошибка удаления слайда',
+      });
+    }
+  }
+);
+
+/* =========================
+   ADMIN ORDERS
+========================= */
+
+app.get(
+  '/api/admin/orders',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const orders = await all(
+        `
+        SELECT *
+        FROM orders
+        ORDER BY id DESC
+        `
+      );
+
+      return res.json({
+        orders,
+      });
+    } catch {
+      return res.status(500).json({
+        message: 'Ошибка получения заказов',
+      });
+    }
+  }
+);
+
+app.patch(
+  '/api/admin/orders/:id/status',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const { status } = req.body;
+
+      await run(`UPDATE orders SET status = ? WHERE id = ?`, [
+        status,
         req.params.id,
-      ]
-    );
+      ]);
 
-    return res.json({
-      message: 'Слайд обновлён',
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка обновления слайда',
-    });
-  }
-});
-
-app.delete('/api/admin/slides/:id', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const slidesCount = await getSlidesCount();
-
-    if (slidesCount <= 3) {
-      return res.status(400).json({
-        message: 'Нельзя оставить меньше 3 слайдов',
+      return res.json({
+        message: 'Статус заказа изменён',
+      });
+    } catch {
+      return res.status(500).json({
+        message: 'Ошибка изменения статуса',
       });
     }
-
-    await run(`DELETE FROM slides WHERE id = ?`, [req.params.id]);
-
-    return res.json({
-      message: 'Слайд удалён',
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка удаления слайда',
-    });
   }
-});
+);
 
-/* 1C INTEGRATION */
+/* =========================
+   1C API
+========================= */
 
-app.get('/api/1c/ping', onecMiddleware, (req, res) => {
+app.get('/api/1c/ping', oneCMiddleware, (req, res) => {
   res.json({
     message: 'Связь с backend TETIM работает',
     time: new Date().toISOString(),
   });
 });
 
-app.post('/api/1c/products/sync', onecMiddleware, async (req, res) => {
+app.post('/api/1c/products/sync', oneCMiddleware, async (req, res) => {
   try {
-    const { products } = req.body;
-
-    if (!Array.isArray(products)) {
-      return res.status(400).json({
-        message: 'Поле products должно быть массивом',
-      });
-    }
+    const products = req.body.products || [];
 
     let created = 0;
     let updated = 0;
 
-    for (const product of products) {
-      const externalId = String(product.external_id || '').trim();
+    for (const item of products) {
+      const externalId = item.external_id || item.id || item.guid || '';
 
-      if (!externalId) continue;
+      if (!externalId) {
+        continue;
+      }
 
       const existing = await get(
         `SELECT * FROM products WHERE external_id = ?`,
         [externalId]
       );
-
-      const payload = {
-        external_id: externalId,
-        article: product.article || '',
-        name: product.name || 'Товар',
-        category: product.category || 'catalog',
-        price: Number(product.price || 0),
-        sizes: product.sizes || '',
-        image_url: product.image_url || '',
-        description: product.description || '',
-        stock: Number(product.stock || 0),
-      };
 
       if (existing) {
         await run(
@@ -1252,25 +1453,24 @@ app.post('/api/1c/products/sync', onecMiddleware, async (req, res) => {
             category = ?,
             price = ?,
             sizes = ?,
-            image_url = ?,
+            stock = ?,
             description = ?,
-            stock = ?
+            updated_at = CURRENT_TIMESTAMP
           WHERE external_id = ?
           `,
           [
-            payload.article,
-            payload.name,
-            payload.category,
-            payload.price,
-            payload.sizes,
-            payload.image_url,
-            payload.description,
-            payload.stock,
-            payload.external_id,
+            item.article || existing.article || '',
+            item.name || existing.name,
+            item.category || existing.category,
+            Number(item.price ?? existing.price),
+            item.sizes || existing.sizes || '',
+            Number(item.stock ?? existing.stock ?? 0),
+            item.description || existing.description || '',
+            externalId,
           ]
         );
 
-        updated++;
+        updated += 1;
       } else {
         await run(
           `
@@ -1281,30 +1481,31 @@ app.post('/api/1c/products/sync', onecMiddleware, async (req, res) => {
             category,
             price,
             sizes,
+            stock,
             image_url,
             description,
-            stock,
             is_published,
-            moderation_status
+            moderation_status,
+            updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
           `,
           [
-            payload.external_id,
-            payload.article,
-            payload.name,
-            payload.category,
-            payload.price,
-            payload.sizes,
-            payload.image_url,
-            payload.description,
-            payload.stock,
+            externalId,
+            item.article || '',
+            item.name || 'Товар из 1С',
+            item.category || 'accessories',
+            Number(item.price || 0),
+            item.sizes || '',
+            Number(item.stock || 0),
+            item.image_url || '',
+            item.description || '',
             0,
-            'pending',
+            'draft',
           ]
         );
 
-        created++;
+        created += 1;
       }
     }
 
@@ -1313,40 +1514,41 @@ app.post('/api/1c/products/sync', onecMiddleware, async (req, res) => {
       created,
       updated,
     });
-  } catch {
+  } catch (error) {
+    console.error('Ошибка синхронизации 1С:', error);
+
     return res.status(500).json({
-      message: 'Ошибка синхронизации товаров с 1С',
+      message: 'Ошибка синхронизации товаров из 1С',
     });
   }
 });
 
-app.post('/api/1c/products/stocks', onecMiddleware, async (req, res) => {
+app.post('/api/1c/products/stocks', oneCMiddleware, async (req, res) => {
   try {
-    const { products } = req.body;
-
-    if (!Array.isArray(products)) {
-      return res.status(400).json({
-        message: 'Поле products должно быть массивом',
-      });
-    }
+    const products = req.body.products || [];
 
     let updated = 0;
 
-    for (const product of products) {
-      const externalId = String(product.external_id || '').trim();
+    for (const item of products) {
+      const externalId = item.external_id || item.id || item.guid || '';
 
-      if (!externalId) continue;
+      if (!externalId) {
+        continue;
+      }
 
       await run(
         `
         UPDATE products
-        SET price = ?, stock = ?
+        SET
+          price = ?,
+          stock = ?,
+          updated_at = CURRENT_TIMESTAMP
         WHERE external_id = ?
         `,
-        [Number(product.price || 0), Number(product.stock || 0), externalId]
+        [Number(item.price || 0), Number(item.stock || 0), externalId]
       );
 
-      updated++;
+      updated += 1;
     }
 
     return res.json({
@@ -1360,32 +1562,19 @@ app.post('/api/1c/products/stocks', onecMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/1c/orders', onecMiddleware, async (req, res) => {
+app.get('/api/1c/orders', oneCMiddleware, async (req, res) => {
   try {
-    const orders = await all(`
+    const orders = await all(
+      `
       SELECT *
       FROM orders
-      WHERE status = 'new'
+      WHERE one_c_status != 'exported'
       ORDER BY id ASC
-    `);
-
-    const normalizedOrders = orders.map((order) => ({
-      id: order.id,
-      user_id: order.user_id,
-      customer_name: order.customer_name,
-      phone: order.phone,
-      email: order.email,
-      address: order.address,
-      delivery_type: order.delivery_type,
-      comment: order.comment,
-      total_amount: order.total_amount,
-      status: order.status,
-      created_at: order.created_at,
-      items: JSON.parse(order.items_json || '[]'),
-    }));
+      `
+    );
 
     return res.json({
-      orders: normalizedOrders,
+      orders,
     });
   } catch {
     return res.status(500).json({
@@ -1394,50 +1583,12 @@ app.get('/api/1c/orders', onecMiddleware, async (req, res) => {
   }
 });
 
-app.patch('/api/1c/orders/:id/status', onecMiddleware, async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    const allowedStatuses = [
-      'new',
-      'processing',
-      'shipped',
-      'done',
-      'cancelled',
-      'exported_to_1c',
-    ];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: 'Недопустимый статус заказа',
-      });
-    }
-
-    await run(
-      `
-      UPDATE orders
-      SET status = ?
-      WHERE id = ?
-      `,
-      [status, req.params.id]
-    );
-
-    return res.json({
-      message: 'Статус заказа обновлён',
-    });
-  } catch {
-    return res.status(500).json({
-      message: 'Ошибка обновления статуса заказа',
-    });
-  }
-});
-
-app.post('/api/1c/orders/:id/exported', onecMiddleware, async (req, res) => {
+app.patch('/api/1c/orders/:id/exported', oneCMiddleware, async (req, res) => {
   try {
     await run(
       `
       UPDATE orders
-      SET status = 'exported_to_1c'
+      SET one_c_status = 'exported'
       WHERE id = ?
       `,
       [req.params.id]
@@ -1448,18 +1599,23 @@ app.post('/api/1c/orders/:id/exported', onecMiddleware, async (req, res) => {
     });
   } catch {
     return res.status(500).json({
-      message: 'Ошибка отметки выгрузки',
+      message: 'Ошибка обновления статуса 1С',
     });
   }
 });
 
-/* START */
+/* =========================
+   START
+========================= */
 
-initDb().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Backend запущен: http://localhost:${PORT}/api`);
-    console.log(`Uploads: http://localhost:${PORT}/uploads`);
-    console.log(`1C ping: http://localhost:${PORT}/api/1c/ping`);
-    console.log('Правила слайдов: минимум 3, максимум 10, видео до 60 секунд');
+initDatabase()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Backend TETIM работает: ${SERVER_URL}`);
+      console.log(`1C ping: ${SERVER_URL}/api/1c/ping`);
+      console.log('Админ: admin@tetim.ru / 1234');
+    });
+  })
+  .catch((error) => {
+    console.error('Ошибка запуска backend:', error);
   });
-});
