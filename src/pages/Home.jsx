@@ -4,69 +4,112 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header.jsx';
 import Footer from '../components/Footer.jsx';
 import HeroSlider from '../components/HeroSlider.jsx';
+import useSiteSettings from '../hooks/useSiteSettings.js';
 
-const demoProducts = [
-  {
-    id: 1,
-    name: 'Худи TETIM',
-    category: 'Худи',
-    description: 'Удобное худи для города и спорта.',
-    price: 3493,
-    sizes: 'S / M / L / XL',
-    image_url: '/assets/',
-  },
-  {
-    id: 2,
-    name: 'Футболка TETIM',
-    category: 'Футболки',
-    description: 'Базовая футболка на каждый день.',
-    price: 1990,
-    sizes: 'S / M / L',
-    image_url: '/assets/',
-  },
-  {
-    id: 3,
-    name: 'Куртка Outdoor',
-    category: 'Куртки',
-    description: 'Куртка для города и активного отдыха.',
-    price: 5990,
-    sizes: 'M / L / XL',
-    image_url: '/assets/',
-  },
-  {
-    id: 4,
-    name: 'Спортивный костюм',
-    category: 'Спортивные костюмы',
-    description: 'Комплект для тренировок и прогулок.',
-    price: 4490,
-    sizes: 'S / M / L / XL',
-    image_url: '/assets/',
-  },
+const API_URL = 'http://localhost:4000/api';
+
+const POPULAR_CATEGORIES = [
+  { title: 'Спортивные костюмы', category: 'suits' },
+  { title: 'Футболки', category: 'tshirts-longsleeves' },
+  { title: 'Худи', category: 'sweatshirts' },
+  { title: 'Пуховики, куртки, ветровки', category: 'jackets' },
+  { title: 'Рубашки', category: 'shirts' },
+  { title: 'Лонгсливы', category: 'tshirts-longsleeves' },
+  { title: 'Сумки', category: 'bags' },
+  { title: 'Рюкзаки', category: 'backpacks' },
+  { title: 'Кепки', category: 'caps' },
+  { title: 'Шапки', category: 'hats' },
+  { title: 'Носки', category: 'socks' },
+  { title: 'Аксессуары', category: 'accessories' },
 ];
 
-const categories = [
-  'Спортивные костюмы',
-  'Футболки',
-  'Outdoor',
-  'Командная форма',
-  'Худи',
-  'Пуховики, куртки, ветровки',
-  'Рубашки',
-  'Футболки и Лонгсливы',
-];
+function formatPrice(value) {
+  return `${Number(value || 0).toLocaleString('ru-RU')} ₽`;
+}
+
+function normalizeProduct(product) {
+  return {
+    id: Number(product.id),
+    external_id: product.external_id || '',
+    article: product.article || '',
+    name: product.name || 'Товар',
+    category: product.category || 'catalog',
+    price: Number(product.price || 0),
+    sizes: product.sizes || '',
+    stock: Number(product.stock || 0),
+    image:
+      product.image_url ||
+      product.image ||
+      'https://placehold.co/600x720?text=TETIM',
+    description: product.description || '',
+  };
+}
 
 export default function Home() {
-  const [search, setSearch] = useState('');
+  const settings = useSiteSettings();
+
+  const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
+  const [toast, setToast] = useState(null);
+
+  const cartCount = cart.reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0
+  );
 
   useEffect(() => {
-    const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
-    setCart(savedCart);
+    loadProducts();
+    loadCart();
   }, []);
 
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  async function loadProducts() {
+    try {
+      const response = await fetch(`${API_URL}/public/products`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setProducts((data.products || []).map(normalizeProduct));
+      } else {
+        setProducts([]);
+      }
+    } catch {
+      setProducts([]);
+    }
+  }
+
+  function loadCart() {
+    const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
+    setCart(savedCart);
+  }
+
+  function saveCart(nextCart) {
+    localStorage.setItem('cart', JSON.stringify(nextCart));
+    setCart(nextCart);
+  }
+
+  function showToast(message, type = 'info') {
+    setToast({
+      message,
+      type,
+    });
+
+    setTimeout(() => {
+      setToast(null);
+    }, 2500);
+  }
+
+  function getCartItem(productId) {
+    return cart.find((item) => Number(item.id) === Number(productId));
+  }
 
   function addToCart(product) {
+    const stockLimit = Number(product.stock || 0);
+
+    if (stockLimit <= 0) {
+      showToast('Товара нет в наличии', 'warning');
+      return;
+    }
+
     const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
 
     const existing = currentCart.find(
@@ -74,194 +117,200 @@ export default function Home() {
     );
 
     if (existing) {
-      existing.quantity += 1;
+      const currentQuantity = Number(existing.quantity || 0);
+
+      if (currentQuantity >= stockLimit) {
+        showToast(`Нельзя добавить больше ${stockLimit} шт.`, 'warning');
+        return;
+      }
+
+      existing.quantity = currentQuantity + 1;
+      existing.stock = stockLimit;
+
+      showToast('Количество обновлено', 'success');
     } else {
-currentCart.push({
-  id: product.id,
-  name: product.name,
-  price: product.price,
-  quantity: 1,
-  image: product.image_url || product.image,
-  size: product.sizes || '',
-});
+      currentCart.push({
+        id: Number(product.id),
+        external_id: product.external_id,
+        article: product.article,
+        name: product.name,
+        price: Number(product.price),
+        quantity: 1,
+        image: product.image,
+        size: product.sizes || '',
+        stock: stockLimit,
+      });
+
+      showToast('Товар добавлен в корзину', 'success');
     }
 
-    localStorage.setItem('cart', JSON.stringify(currentCart));
-    setCart(currentCart);
-    alert(`Добавлено: ${product.name}`);
+    saveCart(currentCart);
   }
 
-  const filteredProducts = demoProducts.filter((product) =>
-    product.name.toLowerCase().includes(search.toLowerCase())
-  );
+  function decreaseQuantity(productId) {
+    const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
+
+    const nextCart = currentCart
+      .map((item) => {
+        if (Number(item.id) !== Number(productId)) {
+          return item;
+        }
+
+        return {
+          ...item,
+          quantity: Number(item.quantity || 0) - 1,
+        };
+      })
+      .filter((item) => Number(item.quantity || 0) > 0);
+
+    saveCart(nextCart);
+  }
 
   return (
     <>
-      <Header
-        cartCount={cartCount}
-        search={search}
-        onSearchChange={setSearch}
-      />
+      <Header cartCount={cartCount} />
 
       <main>
-        <section className="hero-large">
-          <div className="container hero-large-grid">
-            <HeroSlider />
+        <section className="container hero-section">
+          <HeroSlider />
 
-            <div className="hero-large-content">
-              <div className="hero-label">Новая коллекция</div>
+          <div className="hero-content-card">
+            {settings.hero_badge && (
+              <span className="pill">{settings.hero_badge}</span>
+            )}
 
-              <h1>Функциональная одежда для города, спорта и outdoor</h1>
+            <h1>{settings.hero_title}</h1>
 
-              <p>
-                Структура сайта как у большого интернет-магазина: удобный
-                каталог, отдельная корзина, подборки и категории.
-              </p>
+            <p>{settings.hero_text}</p>
 
-              <div className="hero-buttons">
-                <Link to="/catalog" className="btn btn-dark">
-                  Каталог
-                </Link>
+            <div className="hero-actions">
+              <Link to="/catalog" className="btn btn-dark">
+                {settings.hero_button_primary || 'Каталог'}
+              </Link>
 
-               <Link to="/custom-order" className="btn btn-custom-order">
-  Индивидуальный заказ
-</Link>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section">
-          <div className="container">
-            <div className="section-title-row">
-              <h2>Популярные категории</h2>
-            </div>
-
-            <div className="promo-categories-grid">
-              {categories.map((category) => (
-                <Link
-                  key={category}
-                  to="/catalog"
-                  className="promo-category-card"
-                >
-                  {category}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="section section-alt">
-          <div className="container">
-            <div className="section-title-row">
-              <h2>Хиты продаж</h2>
-              <Link to="/catalog" className="section-link">
-                Смотреть все
+              <Link to="/custom-order" className="btn btn-light">
+                {settings.hero_button_secondary || 'Индивидуальный заказ'}
               </Link>
             </div>
+          </div>
+        </section>
 
+        <section className="container">
+          <h2 className="section-title">Популярные категории</h2>
+
+          <div className="popular-categories-grid">
+            {POPULAR_CATEGORIES.map((item) => (
+              <Link
+                key={`${item.category}-${item.title}`}
+                to={`/catalog?category=${item.category}`}
+                className="popular-category-card"
+              >
+                {item.title}
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="container home-products-section">
+          <div className="section-title-row">
+            <h2>Хиты продаж</h2>
+
+            <Link to="/catalog" className="link-accent">
+              Смотреть все
+            </Link>
+          </div>
+
+          {products.length === 0 ? (
+            <div className="card-lite">
+              <h3>Товаров пока нет</h3>
+              <p>Опубликуйте товары в админ-панели.</p>
+            </div>
+          ) : (
             <div className="products-grid">
-              {filteredProducts.map((product) => (
-                <article className="product-card" key={product.id}>
-                  <Link to={`/product/${product.id}`} className="product-card-link">
-                    <div className="product-image-wrap">
-                      <img
-                        className="product-image"
-                        src={product.image_url}
-                        alt={product.name}
-                      />
-                    </div>
-                  </Link>
+              {products.slice(0, 8).map((product) => {
+                const cartItem = getCartItem(product.id);
+                const quantity = Number(cartItem?.quantity || 0);
+                const stockLimit = Number(product.stock || 0);
+                const isMaxQuantity = quantity >= stockLimit;
 
-                  <div className="product-body">
-                    <Link to={`/product/${product.id}`} className="product-card-link">
-                      <div className="product-category">{product.category}</div>
-                      <div className="product-title">{product.name}</div>
-                      <div className="product-desc">{product.description}</div>
+                return (
+                  <article className="product-card" key={product.id}>
+                    <Link
+                      to={`/product/${product.id}`}
+                      className="product-image"
+                    >
+                      <img src={product.image} alt={product.name} />
                     </Link>
 
-                    <div className="product-meta">
-                      <div className="product-price">
-                        {product.price.toLocaleString('ru-RU')} ₽
-                      </div>
-                      <div className="product-size">{product.sizes}</div>
-                    </div>
-
-                    <div className="product-actions">
-                      <button
-                        className="add-cart-btn"
-                        type="button"
-                        onClick={() => addToCart(product)}
+                    <div className="product-card-body">
+                      <Link
+                        to={`/product/${product.id}`}
+                        className="product-title"
                       >
-                        В корзину
-                      </button>
+                        {product.name}
+                      </Link>
+
+                      <div className="product-card-meta">
+                        {product.sizes
+                          ? `Размеры: ${product.sizes}`
+                          : 'Размеры уточняйте'}
+                      </div>
+
+                      <div className="product-card-bottom">
+                        <strong>{formatPrice(product.price)}</strong>
+
+                        {stockLimit <= 0 ? (
+                          <button
+                            className="btn btn-dark"
+                            type="button"
+                            disabled
+                          >
+                            Нет в наличии
+                          </button>
+                        ) : quantity > 0 ? (
+                          <div className="quantity-control">
+                            <button
+                              type="button"
+                              aria-label="Уменьшить количество"
+                              onClick={() => decreaseQuantity(product.id)}
+                            >
+                              −
+                            </button>
+
+                            <span>{quantity}</span>
+
+                            <button
+                              type="button"
+                              aria-label="Увеличить количество"
+                              disabled={isMaxQuantity}
+                              onClick={() => addToCart(product)}
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="btn btn-dark"
+                            type="button"
+                            onClick={() => addToCart(product)}
+                          >
+                            В корзину
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
-          </div>
+          )}
         </section>
 
-        <section className="section">
-          <div className="container promo-banner-grid">
-            <div className="wide-banner dark-banner">
-              <div>
-                <div className="hero-label">Для команд</div>
-                <h3>Пошив формы, мерча и комплектов под заказ</h3>
-                <p>
-                  Для клубов, организаций, спортивных мероприятий и
-                  корпоративных команд.
-                </p>
-              </div>
-            </div>
-
-            <div className="wide-banner gold-banner">
-              <div>
-                <div className="hero-label hero-label-light">
-                  Спецпредложение
-                </div>
-                <h3>Подборки и акции для сезонных коллекций</h3>
-                <p>
-                  На этой зоне можно выводить распродажи, новинки и специальные
-                  предложения.
-                </p>
-              </div>
-            </div>
+        {toast && (
+          <div className={`toast-message toast-${toast.type}`}>
+            <span>{toast.message}</span>
           </div>
-        </section>
-
-        <section className="section section-alt">
-          <div className="container">
-            <div className="section-title-row">
-              <h2>Преимущества</h2>
-            </div>
-
-            <div className="advantages-grid-shop">
-              <div className="advantage-box">
-                <h3>Доставка</h3>
-                <p>Доставка по городу и удобное оформление заказа.</p>
-              </div>
-
-              <div className="advantage-box">
-                <h3>Кэшбек</h3>
-                <p>
-                  5% кэшбэка баллами с каждого оплаченного заказа.
-                </p>
-              </div>
-
-              <div className="advantage-box">
-                <h3>Личный кабинет</h3>
-                <p>История заказов и профиль покупателя.</p>
-              </div>
-
-              <div className="advantage-box">
-                <h3>Интеграция с CRM</h3>
-                <p>Заказы можно передавать в amoCRM и дальше в 1С.</p>
-              </div>
-            </div>
-          </div>
-        </section>
+        )}
       </main>
 
       <Footer />

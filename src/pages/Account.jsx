@@ -11,10 +11,7 @@ const tabs = [
   ['orders', 'Мои заказы'],
   ['returns', 'Мои возвраты'],
   ['bonuses', 'Мои бонусы'],
-  ['discounts', 'Мои скидки'],
-  ['promos', 'Мои промокоды'],
   ['addresses', 'Адреса доставки'],
-  ['notifications', 'Уведомления'],
   ['history', 'История просмотров'],
   ['subscriptions', 'Управление подписками'],
 ];
@@ -310,29 +307,14 @@ export default function Account() {
               <Panel title="Мои бонусы" text="Бонусы пока не начислены" />
             )}
 
-            {activeTab === 'discounts' && (
-              <Panel title="Мои скидки" text="Персональные скидки пока не активированы" />
-            )}
-
-            {activeTab === 'promos' && (
-              <Panel title="Мои промокоды" text="Активных промокодов нет" />
-            )}
-
             {activeTab === 'addresses' && (
               <Panel title="Адреса доставки" text="Сохранённые адреса пока не добавлены" />
-            )}
-
-            {activeTab === 'notifications' && (
-              <Panel title="Уведомления" text="Новых уведомлений нет" />
             )}
 
             {activeTab === 'history' && (
               <Panel title="История просмотров" text="История просмотров пока пуста" />
             )}
 
-            {activeTab === 'subscriptions' && (
-              <Panel title="Управление подписками" text="Настройки подписок будут здесь" />
-            )}
           </section>
         </div>
       </main>

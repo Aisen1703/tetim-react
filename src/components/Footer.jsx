@@ -1,23 +1,36 @@
 import { Link } from 'react-router-dom';
 
+import useSiteSettings from '../hooks/useSiteSettings.js';
+
 export default function Footer() {
+  const settings = useSiteSettings();
+
+  const phoneHref = settings.phone
+    ? `tel:${settings.phone.replace(/[^\d+]/g, '')}`
+    : '';
+
   return (
     <footer className="footer-mega">
       <div className="container footer-mega-top">
         <div className="footer-col">
           <img
-            src="/assets/logo-full-white.png"
+            src={
+              settings.logo_white_url ||
+              settings.logo_url ||
+              '/assets/logo-full-white.png'
+            }
             className="footer-logo"
-            alt="TETIM"
+            alt={settings.site_title || 'TETIM'}
           />
-          <p>Локальный бренд одежды TETIM</p>
+
+          <p>{settings.footer_text || 'Локальный бренд одежды TETIM'}</p>
         </div>
 
         <div className="footer-col">
           <h4>Каталог</h4>
           <Link to="/catalog">Все товары</Link>
-          <Link to="/catalog?category=hoodies">Худи</Link>
-          <Link to="/catalog?category=tshirts">Футболки</Link>
+          <Link to="/catalog?category=sweatshirts">Худи</Link>
+          <Link to="/catalog?category=tshirts-longsleeves">Футболки</Link>
           <Link to="/catalog?category=jackets">Куртки</Link>
         </div>
 
@@ -30,19 +43,54 @@ export default function Footer() {
 
         <div className="footer-col footer-col-wide">
           <h4>Контакты</h4>
-          <a href="tel:+79990600075" className="footer-phone">
-            +7 (999) 060-00-75
-          </a>
+
+          {settings.phone && (
+            <a href={phoneHref} className="footer-phone">
+              {settings.phone}
+            </a>
+          )}
+
+          {settings.email && (
+            <a href={`mailto:${settings.email}`}>
+              {settings.email}
+            </a>
+          )}
+
+          {settings.address && <span>{settings.address}</span>}
 
           <div className="footer-socials">
-            <a href="http://wa.me/7999060075">WA</a>
-            <a href="http://max.ru/7999060075">MAX</a>
-            <a href="https://instagram.com/tetim_yktbrand">IG</a>
+            {settings.whatsapp_url && (
+              <a
+                href={settings.whatsapp_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                WA
+              </a>
+            )}
+
+            {settings.telegram_url && (
+              <a
+                href={settings.telegram_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                TG
+              </a>
+            )}
+
+            {settings.instagram_url && (
+              <a
+                href={settings.instagram_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                IG
+              </a>
+            )}
           </div>
         </div>
       </div>
-
-
     </footer>
   );
 }

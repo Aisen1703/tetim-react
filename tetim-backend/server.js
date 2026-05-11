@@ -168,6 +168,13 @@ async function initDatabase() {
     )
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS site_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    )
+  `);
+
   await addColumnIfNotExists('products', 'external_id', 'TEXT');
   await addColumnIfNotExists('products', 'article', 'TEXT');
   await addColumnIfNotExists('products', 'sizes', 'TEXT');
@@ -175,16 +182,25 @@ async function initDatabase() {
   await addColumnIfNotExists('products', 'image_url', 'TEXT');
   await addColumnIfNotExists('products', 'description', 'TEXT');
   await addColumnIfNotExists('products', 'is_published', 'INTEGER DEFAULT 0');
-  await addColumnIfNotExists('products', 'moderation_status', "TEXT DEFAULT 'draft'");
+  await addColumnIfNotExists(
+    'products',
+    'moderation_status',
+    "TEXT DEFAULT 'draft'"
+  );
   await addColumnIfNotExists('products', 'updated_at', 'TEXT');
 
   await addColumnIfNotExists('orders', 'delivery_type', "TEXT DEFAULT 'pickup'");
   await addColumnIfNotExists('orders', 'amo_status', "TEXT DEFAULT 'not_sent'");
-  await addColumnIfNotExists('orders', 'one_c_status', "TEXT DEFAULT 'not_exported'");
+  await addColumnIfNotExists(
+    'orders',
+    'one_c_status',
+    "TEXT DEFAULT 'not_exported'"
+  );
 
   await seedAdmin();
   await seedProducts();
   await seedSlides();
+  await seedSiteSettings();
 }
 
 async function seedAdmin() {
@@ -295,21 +311,24 @@ async function seedSlides() {
     {
       title: 'Товар дня',
       subtitle: 'Скидки на коллекцию TETIM',
-      image_url: 'https://placehold.co/800x1000/e5de00/111111?text=TETIM+SLIDE+1',
+      image_url:
+        'https://placehold.co/800x1000/e5de00/111111?text=TETIM+SLIDE+1',
       media_type: 'image',
       sort_order: 1,
     },
     {
       title: 'Новая коллекция',
       subtitle: 'Одежда для города и спорта',
-      image_url: 'https://placehold.co/800x1000/111111/ffffff?text=TETIM+SLIDE+2',
+      image_url:
+        'https://placehold.co/800x1000/111111/ffffff?text=TETIM+SLIDE+2',
       media_type: 'image',
       sort_order: 2,
     },
     {
       title: 'Outdoor',
       subtitle: 'Форма, куртки и комплекты',
-      image_url: 'https://placehold.co/800x1000/d29a34/111111?text=TETIM+SLIDE+3',
+      image_url:
+        'https://placehold.co/800x1000/d29a34/111111?text=TETIM+SLIDE+3',
       media_type: 'image',
       sort_order: 3,
     },
@@ -339,6 +358,49 @@ async function seedSlides() {
         1,
       ]
     );
+  }
+}
+
+async function seedSiteSettings() {
+  const defaults = {
+    site_title: 'TETIM',
+    logo_url: '/assets/logo-full.png',
+    logo_white_url: '/assets/logo-full-white.png',
+
+    hero_badge: 'Новая коллекция',
+    hero_title: 'Функциональная одежда для города, спорта и outdoor',
+    hero_text:
+      'Структура сайта как у большого интернет-магазина: удобный каталог, отдельная корзина, подборки и категории.',
+    hero_button_primary: 'Каталог',
+    hero_button_secondary: 'Индивидуальный заказ',
+
+    footer_text: '© 2026 TETIM. Все права защищены.',
+    phone: '+7 999 060 00 75',
+    email: 'info@tetim.ru',
+    address: 'Якутск',
+
+    telegram_url: '',
+    whatsapp_url: '',
+    instagram_url: '',
+
+    accent_color: '#111111',
+    background_color: '#f4f0e8',
+  };
+
+  for (const [key, value] of Object.entries(defaults)) {
+    const existing = await get(`SELECT key FROM site_settings WHERE key = ?`, [
+      key,
+    ]);
+
+    if (!existing) {
+      await run(
+        `
+        INSERT INTO site_settings (key, value)
+        VALUES (?, ?)
+        `,
+        [key, value]
+      );
+    }
   }
 }
 
@@ -742,6 +804,91 @@ app.get('/api/public/slides', async (req, res) => {
     });
   }
 });
+
+/* =========================
+   SITE SETTINGS
+========================= */
+
+app.get('/api/public/settings', async (req, res) => {
+  try {
+    const rows = await all(`SELECT key, value FROM site_settings`);
+
+    const settings = {};
+
+    for (const row of rows) {
+      settings[row.key] = row.value;
+    }
+
+    return res.json({
+      settings,
+    });
+  } catch (error) {
+    console.error('Ошибка получения настроек сайта:', error);
+
+    return res.status(500).json({
+      message: 'Ошибка получения настроек сайта',
+    });
+  }
+});
+
+app.get(
+  '/api/admin/settings',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const rows = await all(`SELECT key, value FROM site_settings`);
+
+      const settings = {};
+
+      for (const row of rows) {
+        settings[row.key] = row.value;
+      }
+
+      return res.json({
+        settings,
+      });
+    } catch (error) {
+      console.error('Ошибка получения настроек сайта админом:', error);
+
+      return res.status(500).json({
+        message: 'Ошибка получения настроек сайта',
+      });
+    }
+  }
+);
+
+app.patch(
+  '/api/admin/settings',
+  authMiddleware,
+  adminMiddleware,
+  async (req, res) => {
+    try {
+      const settings = req.body.settings || {};
+
+      for (const [key, value] of Object.entries(settings)) {
+        await run(
+          `
+          INSERT INTO site_settings (key, value)
+          VALUES (?, ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+          `,
+          [key, String(value ?? '')]
+        );
+      }
+
+      return res.json({
+        message: 'Настройки сайта сохранены',
+      });
+    } catch (error) {
+      console.error('Ошибка сохранения настроек сайта:', error);
+
+      return res.status(500).json({
+        message: 'Ошибка сохранения настроек сайта',
+      });
+    }
+  }
+);
 
 /* =========================
    ORDERS
@@ -1341,9 +1488,9 @@ app.delete(
     try {
       const countRow = await get(`SELECT COUNT(*) as count FROM slides`);
 
-      if (countRow.count <= 3) {
+      if (countRow.count <= 0) {
         return res.status(400).json({
-          message: 'Нельзя оставить меньше 3 слайдов',
+          message: 'Слайдов уже нет',
         });
       }
 

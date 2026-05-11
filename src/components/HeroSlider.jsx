@@ -1,79 +1,86 @@
 import { useEffect, useState } from 'react';
 
-const fallbackSlides = [
-  {
-    image_url: '/assets/afisha1.jpg',
-    media_type: 'image',
-    background_color: '#d8c900',
-  },
-  {
-    image_url: '/assets/afisha2.jpg',
-    media_type: 'image',
-    background_color: '#4aa7d8',
-  },
-  {
-    image_url: '/assets/afisha3.jpg',
-    media_type: 'image',
-    background_color: '#d88422',
-  },
-];
+const API_URL = 'http://localhost:4000/api';
+
+function getMediaUrl(url) {
+  if (!url) {
+    return '';
+  }
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+
+  return url;
+}
 
 export default function HeroSlider() {
-  const [slides, setSlides] = useState(fallbackSlides);
-  const [currentSlide, setCurrentSlide] = useState(0);
+  const [slides, setSlides] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     loadSlides();
   }, []);
 
   useEffect(() => {
-    if (!slides.length) return;
+    if (slides.length <= 1) {
+      return;
+    }
 
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000);
+      setActiveIndex((prev) => {
+        if (prev >= slides.length - 1) {
+          return 0;
+        }
+
+        return prev + 1;
+      });
+    }, 4000);
 
     return () => clearInterval(timer);
-  }, [slides]);
+  }, [slides.length]);
 
   async function loadSlides() {
     try {
-      const response = await fetch('http://localhost:4000/api/public/slides');
+      const response = await fetch(`${API_URL}/public/slides`);
       const data = await response.json();
 
-      if (response.ok && data.slides?.length >= 3) {
-        setSlides(data.slides.slice(0, 10));
+      if (response.ok) {
+        setSlides(data.slides || []);
+      } else {
+        setSlides([]);
       }
-    } catch {
-      setSlides(fallbackSlides);
+    } catch (error) {
+      console.error('Ошибка загрузки слайдов:', error);
+      setSlides([]);
     }
   }
 
-  function nextSlide() {
-    setCurrentSlide((prev) => (prev + 1) % slides.length);
+  if (slides.length === 0) {
+    return (
+      <div className="hero-slider hero-slider-empty">
+        <span>Слайды пока не добавлены</span>
+      </div>
+    );
   }
-
-  function prevSlide() {
-    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
-  }
-
-  const activeSlide = slides[currentSlide];
 
   return (
-    <div
-      className="hero-large-image hero-slider"
-      style={{ background: activeSlide.background_color || '#d8c900' }}
-    >
-      <div className="hero-slides">
-        {slides.map((slide, index) => (
+    <div className="hero-slider">
+      {slides.map((slide, index) => {
+        const mediaUrl = getMediaUrl(slide.image_url);
+        const isActive = index === activeIndex;
+
+        return (
           <div
-            key={slide.id || slide.image_url}
-            className={`hero-slide ${index === currentSlide ? 'active' : ''}`}
+            key={slide.id}
+            className={`hero-slide ${isActive ? 'active' : ''}`}
+            style={{
+              backgroundColor: slide.background_color || '#111111',
+            }}
           >
             {slide.media_type === 'video' ? (
               <video
-                src={slide.image_url}
-                className="hero-slide-video"
+                src={mediaUrl}
                 autoPlay
                 muted
                 loop
@@ -81,40 +88,27 @@ export default function HeroSlider() {
               />
             ) : (
               <img
-                src={slide.image_url}
-                alt={slide.title || `TETIM слайд ${index + 1}`}
+                src={mediaUrl}
+                alt="TETIM slide"
               />
             )}
           </div>
-        ))}
-      </div>
+        );
+      })}
 
-      <button
-        className="hero-arrow hero-arrow-prev"
-        type="button"
-        onClick={prevSlide}
-      >
-        ‹
-      </button>
-
-      <button
-        className="hero-arrow hero-arrow-next"
-        type="button"
-        onClick={nextSlide}
-      >
-        ›
-      </button>
-
-      <div className="hero-slider-dots">
-        {slides.map((_, index) => (
-          <button
-            key={index}
-            className={`hero-dot ${index === currentSlide ? 'active' : ''}`}
-            type="button"
-            onClick={() => setCurrentSlide(index)}
-          />
-        ))}
-      </div>
+      {slides.length > 1 && (
+        <div className="hero-slider-dots">
+          {slides.map((slide, index) => (
+            <button
+              key={slide.id}
+              type="button"
+              className={index === activeIndex ? 'active' : ''}
+              onClick={() => setActiveIndex(index)}
+              aria-label={`Слайд ${index + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

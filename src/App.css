@@ -182,3 +182,6 @@
     border-right-color: var(--border);
   }
 }
+body {
+  font-family: "Inter", Arial, sans-serif;
+}

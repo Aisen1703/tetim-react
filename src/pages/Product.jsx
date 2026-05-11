@@ -3,9 +3,27 @@ import { Link, useParams } from 'react-router-dom';
 
 import Header from '../components/Header.jsx';
 import Footer from '../components/Footer.jsx';
-import { getProducts } from '../api/productsStorage.js';
 
 const API_URL = 'http://localhost:4000/api';
+
+const CATEGORY_LABELS = {
+  accessories: 'Аксессуары',
+  sale: 'Акционные товары',
+  'pants-shorts': 'Брюки и Шорты',
+  headwear: 'Головные уборы',
+  sweatshirts: 'Джемпера, свитшоты, толстовки',
+  vests: 'Жилеты',
+  suits: 'Костюмы, комплекты',
+  jackets: 'Пуховики, куртки, ветровки',
+  shirts: 'Рубашки',
+  'tshirts-longsleeves': 'Футболки и Лонгсливы',
+  bags: 'Сумки',
+  backpacks: 'Рюкзаки',
+  caps: 'Кепки',
+  hats: 'Шапки',
+  socks: 'Носки',
+  belts: 'Ремни',
+};
 
 function formatPrice(value) {
   return `${Number(value || 0).toLocaleString('ru-RU')} ₽`;
@@ -14,116 +32,186 @@ function formatPrice(value) {
 function normalizeProduct(product) {
   return {
     id: Number(product.id),
+    external_id: product.external_id || '',
+    article: product.article || '',
     name: product.name || 'Товар',
-    category: product.categoryTitle || product.category || 'Каталог',
+    category: product.category || '',
     price: Number(product.price || 0),
-    sizes: product.sizes || product.size || 'One size',
+    sizes: product.sizes || 'One size',
+    stock: Number(product.stock || 0),
     image:
       product.image_url ||
       product.image ||
-      'https://placehold.co/600x720?text=No+Image',
-    description: product.description || 'Описание товара скоро появится.',
+      'https://placehold.co/800x1000?text=TETIM',
+    description: product.description || 'Описание товара пока не добавлено.',
   };
 }
 
 export default function Product() {
   const { id } = useParams();
 
-  const [product, setProduct] = useState(null);
-  const [isNotFound, setIsNotFound] = useState(false);
-  const [activeSize, setActiveSize] = useState('');
-  const [cartVersion, setCartVersion] = useState(0);
+  const [cart, setCart] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [selectedSize, setSelectedSize] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [stockMessage, setStockMessage] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const cart = JSON.parse(localStorage.getItem('cart') || '[]');
   const cartCount = cart.reduce(
     (sum, item) => sum + Number(item.quantity || 0),
     0
   );
 
-  const quantity = cart.find(
-    item => Number(item.id) === Number(id)
-  )?.quantity || 0;
-
-  const sizes = useMemo(() => {
-    return String(product?.sizes || 'One size')
-      .split(',')
-      .map(size => size.trim())
-      .filter(Boolean);
-  }, [product]);
-
   useEffect(() => {
-    loadProduct();
+    loadCart();
+    loadProducts();
   }, [id]);
 
-  useEffect(() => {
-    if (product?.name) {
-      document.title = `${product.name} — TETIM`;
-    }
-  }, [product]);
-
-  async function loadProduct() {
-    try {
-      const response = await fetch(`${API_URL}/public/products`);
-      const data = await response.json();
-
-      if (response.ok && data.products) {
-        const apiProducts = data.products.map(normalizeProduct);
-        const found = apiProducts.find(item => Number(item.id) === Number(id));
-
-        if (found) {
-          setProduct(found);
-          setActiveSize(String(found.sizes || 'One size').split(',')[0].trim());
-          setIsNotFound(false);
-          return;
-        }
-      }
-    } catch {
-      // Если backend не запущен, берём товары из localStorage
-    }
-
-    const localProducts = getProducts().map(normalizeProduct);
-    const foundLocal = localProducts.find(
-      item => Number(item.id) === Number(id)
-    );
-
-    if (!foundLocal) {
-      setIsNotFound(true);
-      return;
-    }
-
-    setProduct(foundLocal);
-    setActiveSize(String(foundLocal.sizes || 'One size').split(',')[0].trim());
-    setIsNotFound(false);
+  function loadCart() {
+    const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
+    setCart(savedCart);
   }
 
   function saveCart(nextCart) {
     localStorage.setItem('cart', JSON.stringify(nextCart));
-    setCartVersion(prev => prev + 1);
+    setCart(nextCart);
+  }
+
+  async function loadProducts() {
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/public/products`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setProducts((data.products || []).map(normalizeProduct));
+      } else {
+        setProducts([]);
+      }
+    } catch {
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const product = useMemo(() => {
+    return products.find((item) => Number(item.id) === Number(id));
+  }, [products, id]);
+
+  const sizeList = useMemo(() => {
+    if (!product?.sizes) return ['One size'];
+
+    return String(product.sizes)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }, [product]);
+
+  const cartItem = useMemo(() => {
+    if (!product) return null;
+
+    return cart.find(
+      (item) =>
+        Number(item.id) === Number(product.id) &&
+        String(item.size || '') === String(selectedSize || '')
+    );
+  }, [cart, product, selectedSize]);
+
+  const cartItemQuantity = Number(cartItem?.quantity || 0);
+
+  useEffect(() => {
+    if (sizeList.length > 0) {
+      setSelectedSize(sizeList[0]);
+    }
+  }, [product?.id]);
+
+  function getCategoryLabel(category) {
+    return CATEGORY_LABELS[category] || category || 'Каталог';
+  }
+
+  function showStockMessage(text) {
+    setStockMessage(text);
+
+    setTimeout(() => {
+      setStockMessage('');
+    }, 2500);
   }
 
   function addToCart() {
     if (!product) return;
 
+    if (product.stock <= 0) {
+      showStockMessage('Товара нет в наличии');
+      return;
+    }
+
     const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
 
     const existing = currentCart.find(
-      item => Number(item.id) === Number(product.id)
+      (item) =>
+        Number(item.id) === Number(product.id) &&
+        String(item.size || '') === String(selectedSize || '')
     );
 
+    const currentQuantity = Number(existing?.quantity || 0);
+    const nextQuantity = currentQuantity + quantity;
+
+    if (nextQuantity > product.stock) {
+      showStockMessage(
+        `Больше нельзя. Остаток на складе: ${product.stock} шт.`
+      );
+      return;
+    }
+
     if (existing) {
-      existing.quantity = Number(existing.quantity) + 1;
+      existing.quantity = nextQuantity;
+      existing.stock = product.stock;
     } else {
-currentCart.push({
-  id: Number(product.id),
-  name: product.name,
-  price: Number(product.price),
-  quantity: 1,
-  image: product.image,
-  size: activeSize,
-});
+      currentCart.push({
+        id: Number(product.id),
+        external_id: product.external_id,
+        article: product.article,
+        name: product.name,
+        price: Number(product.price),
+        quantity,
+        image: product.image,
+        size: selectedSize || '',
+        stock: product.stock,
+      });
     }
 
     saveCart(currentCart);
+  }
+
+  function increaseCartItem() {
+    if (!product) return;
+
+    if (cartItemQuantity >= product.stock) {
+      showStockMessage(
+        `Больше нельзя. Остаток на складе: ${product.stock} шт.`
+      );
+      return;
+    }
+
+    const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
+
+    const nextCart = currentCart.map((item) => {
+      const isSameProduct =
+        Number(item.id) === Number(product.id) &&
+        String(item.size || '') === String(selectedSize || '');
+
+      if (!isSameProduct) return item;
+
+      return {
+        ...item,
+        quantity: Number(item.quantity || 0) + 1,
+        stock: product.stock,
+      };
+    });
+
+    saveCart(nextCart);
   }
 
   function decreaseCartItem() {
@@ -131,55 +219,41 @@ currentCart.push({
 
     const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
 
-    const existing = currentCart.find(
-      item => Number(item.id) === Number(product.id)
-    );
+    const nextCart = currentCart
+      .map((item) => {
+        const isSameProduct =
+          Number(item.id) === Number(product.id) &&
+          String(item.size || '') === String(selectedSize || '');
 
-    if (!existing) return;
+        if (!isSameProduct) return item;
 
-    existing.quantity = Number(existing.quantity) - 1;
-
-    const nextCart = currentCart.filter(
-      item => Number(item.quantity) > 0
-    );
+        return {
+          ...item,
+          quantity: Number(item.quantity || 0) - 1,
+        };
+      })
+      .filter((item) => Number(item.quantity || 0) > 0);
 
     saveCart(nextCart);
   }
 
-  if (isNotFound) {
-    return (
-      <>
-        <Header cartCount={cartCount} />
-
-        <main className="container product-page">
-          <div className="product-not-found">
-            <h1>Товар не найден</h1>
-            <p>Возможно, товар был удалён или ссылка указана неверно.</p>
-            <Link to="/catalog" className="btn btn-dark">
-              Вернуться в каталог
-            </Link>
-          </div>
-        </main>
-
-        <Footer />
-      </>
-    );
+  function decreaseQuantity() {
+    setQuantity((prev) => (prev > 1 ? prev - 1 : 1));
   }
 
-  if (!product) {
-    return (
-      <>
-        <Header cartCount={cartCount} />
+  function increaseQuantity() {
+    if (!product) return;
 
-        <main className="container product-page">
-          <div className="card-lite">
-            <p>Загрузка товара...</p>
-          </div>
-        </main>
+    setQuantity((prev) => {
+      if (prev >= product.stock) {
+        showStockMessage(
+          `Больше нельзя. Остаток на складе: ${product.stock} шт.`
+        );
+        return prev;
+      }
 
-        <Footer />
-      </>
-    );
+      return prev + 1;
+    });
   }
 
   return (
@@ -187,119 +261,179 @@ currentCart.push({
       <Header cartCount={cartCount} />
 
       <main className="container product-page">
-        <div className="product-breadcrumbs">
-          <Link to="/">Главная</Link>
-          <span>›</span>
-          <Link to="/catalog">Каталог</Link>
-          <span>›</span>
-          <span>{product.name}</span>
-        </div>
+        {loading ? (
+          <div className="product-not-found">
+            <h2>Загрузка товара...</h2>
+          </div>
+        ) : !product ? (
+          <div className="product-not-found">
+            <h2>Товар не найден</h2>
+            <p>Возможно, он ещё не опубликован или был удалён.</p>
 
-        <section className="product-detail-layout">
-          <div className="product-detail-gallery">
-            <div className="product-main-image-wrap">
-              <img
-                src={product.image}
-                alt={product.name}
-                className="product-main-image"
-              />
+            <div style={{ marginTop: 20 }}>
+              <Link to="/catalog" className="btn btn-dark">
+                Вернуться в каталог
+              </Link>
             </div>
           </div>
-
-          <div className="product-detail-info">
-            <div className="product-detail-brand">TETIM</div>
-
-            <h1>{product.name}</h1>
-
-            <div className="product-detail-rating">
-              <span>★★★★★</span>
-              <small>4.8 · 24 отзыва</small>
+        ) : (
+          <>
+            <div className="product-breadcrumbs">
+              <Link to="/">Главная</Link>
+              <span>/</span>
+              <Link to="/catalog">Каталог</Link>
+              <span>/</span>
+              <Link to={`/catalog?category=${product.category}`}>
+                {getCategoryLabel(product.category)}
+              </Link>
+              <span>/</span>
+              <span>{product.name}</span>
             </div>
 
-            <div className="product-detail-price">
-              {formatPrice(product.price)}
-            </div>
-
-            <div className="product-detail-section">
-              <div className="product-detail-label">Размеры</div>
-
-              <div className="product-size-list">
-                {sizes.map(size => (
-                  <button
-                    key={size}
-                    type="button"
-                    className={`product-size-btn ${
-                      activeSize === size ? 'active' : ''
-                    }`}
-                    onClick={() => setActiveSize(size)}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="product-detail-section">
-              <div className="product-detail-label">Количество</div>
-
-              {quantity > 0 ? (
-                <div className="cart-stepper product-detail-stepper">
-                  <button type="button" onClick={decreaseCartItem}>
-                    −
-                  </button>
-                  <span>{quantity} шт.</span>
-                  <button type="button" onClick={addToCart}>
-                    +
-                  </button>
+            <section className="product-detail-layout">
+              <div className="product-detail-gallery">
+                <div className="product-main-image-wrap">
+                  <img
+                    className="product-main-image"
+                    src={product.image}
+                    alt={product.name}
+                  />
                 </div>
-              ) : (
-                <button
-                  className="product-detail-cart-btn"
-                  type="button"
-                  onClick={addToCart}
+              </div>
+
+              <div className="product-detail-info">
+                <div className="product-detail-brand">TETIM</div>
+
+                <h1>{product.name}</h1>
+
+                <div className="product-detail-rating">
+                  ★★★★★ <small>в наличии</small>
+                </div>
+
+                <div className="product-detail-price">
+                  {formatPrice(product.price)}
+                </div>
+
+                <div className="product-detail-section">
+                  <div className="product-detail-label">Размер</div>
+
+                  <div className="product-size-list">
+                    {sizeList.map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        className={`product-size-btn ${
+                          selectedSize === size ? 'active' : ''
+                        }`}
+                        onClick={() => setSelectedSize(size)}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {cartItemQuantity === 0 && (
+                  <div className="product-detail-section">
+                    <div className="product-detail-label">Количество</div>
+
+                    <div className="cart-stepper product-detail-stepper">
+                      <button type="button" onClick={decreaseQuantity}>
+                        −
+                      </button>
+
+                      <span>{quantity}</span>
+
+                      <button type="button" onClick={increaseQuantity}>
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {cartItemQuantity > 0 ? (
+                  <div className="product-cart-added-row">
+                    <Link to="/cart" className="product-go-cart-btn">
+                      Перейти в корзину
+                    </Link>
+
+                    <div className="product-added-stepper">
+                      <button type="button" onClick={decreaseCartItem}>
+                        −
+                      </button>
+
+                      <span>{cartItemQuantity}</span>
+
+                      <button type="button" onClick={increaseCartItem}>
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="product-detail-cart-btn"
+                    onClick={addToCart}
+                  >
+                    Добавить в корзину
+                  </button>
+                )}
+
+                {stockMessage && (
+                  <div className="product-stock-message">{stockMessage}</div>
+                )}
+
+                <div
+                  className="product-detail-delivery"
+                  style={{ marginTop: 18 }}
                 >
-                  В корзину
-                </button>
-              )}
-            </div>
+                  <strong>Доставка и самовывоз</strong>
+                  <p>
+                    Доставка по Якутску и самовывоз по адресу: ул. Дежнева, д.
+                    30
+                  </p>
+                </div>
 
-            <div className="product-detail-delivery">
-              <strong>Доставка по Якутску</strong>
-              <p>
-                Можно оформить заказ онлайн или связаться с магазином для
-                уточнения наличия.
-              </p>
-            </div>
-          </div>
-        </section>
+                <div className="product-stock-box" style={{ marginTop: 14 }}>
+                  <strong>Остаток:</strong> {product.stock} шт.
+                </div>
+              </div>
+            </section>
 
-        <section className="product-detail-bottom">
-          <div className="product-accordion-row">
-            <h2>Описание</h2>
-            <p>{product.description}</p>
-          </div>
-
-          <div className="product-accordion-row">
-            <h2>Характеристики</h2>
-
-            <div className="product-characteristics">
-              <div>
-                <span>Категория</span>
-                <strong>{product.category}</strong>
+            <section className="product-detail-bottom">
+              <div className="product-accordion-row">
+                <h2>Описание</h2>
+                <p>{product.description}</p>
               </div>
 
-              <div>
-                <span>Размеры</span>
-                <strong>{product.sizes}</strong>
-              </div>
+              <div className="product-accordion-row">
+                <h2>Характеристики</h2>
 
-              <div>
-                <span>Бренд</span>
-                <strong>TETIM</strong>
+                <div className="product-characteristics">
+                  <div>
+                    <span>Категория</span>
+                    <strong>{getCategoryLabel(product.category)}</strong>
+                  </div>
+
+                  <div>
+                    <span>Размеры</span>
+                    <strong>{product.sizes || 'One size'}</strong>
+                  </div>
+
+                  <div>
+                    <span>Бренд</span>
+                    <strong>TETIM</strong>
+                  </div>
+
+                  <div>
+                    <span>Артикул</span>
+                    <strong>{product.article || '—'}</strong>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          </>
+        )}
       </main>
 
       <Footer />

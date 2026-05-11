@@ -1,0 +1,15 @@
+{
+  "products": [
+    {
+      "external_id": "1C-001",
+      "article": "HD-001",
+      "name": "Худи TETIM из 1С",
+      "category": "sweatshirts",
+      "price": 3490,
+      "sizes": "S,M,L,XL",
+      "stock": 15,
+      "image_url": "https://placehold.co/600x720?text=1C+PRODUCT",
+      "description": "Тестовый товар из 1С"
+    }
+  ]
+}

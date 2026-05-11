@@ -2,22 +2,23 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import AuthModal from './AuthModal.jsx';
+import useSiteSettings from '../hooks/useSiteSettings.js';
 
 export default function Header({ cartCount = 0, search = '', onSearchChange }) {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
+  const settings = useSiteSettings();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   return (
     <>
       <header className="site-header">
-
         <div className="main-header">
           <div className="container main-header-inner">
             <Link to="/" className="logo-link">
               <img
-                src="/assets/logo-full.png"
-                alt="TETIM"
+                src={settings.logo_url || '/assets/logo-full.png'}
+                alt={settings.site_title || 'TETIM'}
                 className="brand-logo"
               />
             </Link>
@@ -61,17 +62,6 @@ export default function Header({ cartCount = 0, search = '', onSearchChange }) {
             </div>
           </div>
         </div>
-
-        <nav className="category-nav">
-          <div className="container category-nav-inner">
-            <Link to="/catalog?category=accessories">Аксессуары</Link>
-            <Link to="/catalog?category=pants">Брюки</Link>
-            <Link to="/catalog?category=hoodies">Худи</Link>
-            <Link to="/catalog?category=jackets">Куртки</Link>
-            <Link to="/catalog?category=tshirts">Футболки</Link>
-            <Link to="/custom-order">Индивидуальный заказ</Link>
-          </div>
-        </nav>
       </header>
 
       <AuthModal
