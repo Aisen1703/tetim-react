@@ -15,11 +15,6 @@ const POPULAR_CATEGORIES = [
   { title: 'Пуховики, куртки, ветровки', category: 'jackets' },
   { title: 'Рубашки', category: 'shirts' },
   { title: 'Лонгсливы', category: 'tshirts-longsleeves' },
-  { title: 'Сумки', category: 'bags' },
-  { title: 'Рюкзаки', category: 'backpacks' },
-  { title: 'Кепки', category: 'caps' },
-  { title: 'Шапки', category: 'hats' },
-  { title: 'Носки', category: 'socks' },
   { title: 'Аксессуары', category: 'accessories' },
 ];
 

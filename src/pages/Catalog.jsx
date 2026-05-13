@@ -18,12 +18,6 @@ const CATEGORIES = [
   { value: 'jackets', label: 'Пуховики, куртки, ветровки' },
   { value: 'shirts', label: 'Рубашки' },
   { value: 'tshirts-longsleeves', label: 'Футболки и Лонгсливы' },
-  { value: 'bags', label: 'Сумки' },
-  { value: 'backpacks', label: 'Рюкзаки' },
-  { value: 'caps', label: 'Кепки' },
-  { value: 'hats', label: 'Шапки' },
-  { value: 'socks', label: 'Носки' },
-  { value: 'belts', label: 'Ремни' },
 ];
 
 function formatPrice(value) {
@@ -231,113 +225,124 @@ export default function Catalog() {
           />
         </div>
 
-        <div className="catalog-filters">
-          {CATEGORIES.map((category) => (
-            <button
-              key={category.value}
-              type="button"
-              className={`catalog-filter-btn ${
-                selectedCategory === category.value ? 'active' : ''
-              }`}
-              onClick={() => changeCategory(category.value)}
-            >
-              {category.label}
-            </button>
-          ))}
-        </div>
+        <div className="catalog-layout">
+          <aside className="catalog-sidebar">
+            <h3>Категории</h3>
 
-        {filteredProducts.length === 0 ? (
-          <section className="card-lite">
-            <h3>Товаров пока нет</h3>
-            <p>
-              В этой категории нет опубликованных товаров. Проверьте публикацию
-              в админке или выберите “Все товары”.
-            </p>
-          </section>
-        ) : (
-          <section className="products-grid">
-            {filteredProducts.map((product) => {
-              const cartItem = getCartItem(product.id);
-              const quantity = Number(cartItem?.quantity || 0);
-              const stockLimit = Number(product.stock || 0);
-              const isMaxQuantity = quantity >= stockLimit;
+            <div className="catalog-sidebar-list">
+              {CATEGORIES.map((category) => (
+                <button
+                  key={category.value}
+                  type="button"
+                  className={`catalog-sidebar-btn ${
+                    selectedCategory === category.value ? 'active' : ''
+                  }`}
+                  onClick={() => changeCategory(category.value)}
+                >
+                  {category.label}
+                </button>
+              ))}
+            </div>
+          </aside>
 
-              return (
-                <article className="product-card" key={product.id}>
-                  <Link to={`/product/${product.id}`} className="product-image">
-                    <img src={product.image} alt={product.name} />
-                  </Link>
+          <div className="catalog-content">
+            {filteredProducts.length === 0 ? (
+              <section className="card-lite">
+                <h3>Товаров пока нет</h3>
+                <p>
+                  В этой категории нет опубликованных товаров. Проверьте
+                  публикацию в админке или выберите “Все товары”.
+                </p>
+              </section>
+            ) : (
+              <section className="products-grid">
+                {filteredProducts.map((product) => {
+                  const cartItem = getCartItem(product.id);
+                  const quantity = Number(cartItem?.quantity || 0);
+                  const stockLimit = Number(product.stock || 0);
+                  const isMaxQuantity = quantity >= stockLimit;
 
-                  <div className="product-card-body">
-                    <div className="product-card-category">
-                      {getCategoryLabel(product.category)}
-                    </div>
+                  return (
+                    <article className="product-card" key={product.id}>
+                      <Link
+                        to={`/product/${product.id}`}
+                        className="product-image"
+                      >
+                        <img src={product.image} alt={product.name} />
+                      </Link>
 
-                    <Link
-                      to={`/product/${product.id}`}
-                      className="product-title"
-                    >
-                      {product.name}
-                    </Link>
-
-                    <div className="product-card-meta">
-                      {product.sizes
-                        ? `Размеры: ${product.sizes}`
-                        : 'Размеры уточняйте'}
-                    </div>
-
-                    <div className="product-card-meta">
-                      Остаток: {stockLimit}
-                    </div>
-
-                    <div className="product-card-bottom">
-                      <strong>{formatPrice(product.price)}</strong>
-
-                      {stockLimit <= 0 ? (
-                        <button
-                          className="btn btn-dark"
-                          type="button"
-                          disabled
-                        >
-                          Нет в наличии
-                        </button>
-                      ) : quantity > 0 ? (
-                        <div className="quantity-control">
-                          <button
-                            type="button"
-                            aria-label="Уменьшить количество"
-                            onClick={() => decreaseQuantity(product.id)}
-                          >
-                            −
-                          </button>
-
-                          <span>{quantity}</span>
-
-                          <button
-                            type="button"
-                            aria-label="Увеличить количество"
-                            disabled={isMaxQuantity}
-                            onClick={() => addToCart(product)}
-                          >
-                            +
-                          </button>
+                      <div className="product-card-body">
+                        <div className="product-card-category">
+                          {getCategoryLabel(product.category)}
                         </div>
-                      ) : (
-                        <button
-                          className="btn btn-dark"
-                          type="button"
-                          onClick={() => addToCart(product)}
+
+                        <Link
+                          to={`/product/${product.id}`}
+                          className="product-title"
                         >
-                          В корзину
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        )}
+                          {product.name}
+                        </Link>
+
+                        <div className="product-card-meta">
+                          {product.sizes
+                            ? `Размеры: ${product.sizes}`
+                            : 'Размеры уточняйте'}
+                        </div>
+
+                        <div className="product-card-meta">
+                          Остаток: {stockLimit}
+                        </div>
+
+                        <div className="product-card-bottom">
+                          <strong>{formatPrice(product.price)}</strong>
+
+                          {stockLimit <= 0 ? (
+                            <button
+                              className="btn btn-dark"
+                              type="button"
+                              disabled
+                            >
+                              Нет в наличии
+                            </button>
+                          ) : quantity > 0 ? (
+                            <div className="quantity-control">
+                              <button
+                                type="button"
+                                aria-label="Уменьшить количество"
+                                onClick={() => decreaseQuantity(product.id)}
+                              >
+                                −
+                              </button>
+
+                              <span>{quantity}</span>
+
+                              <button
+                                type="button"
+                                aria-label="Увеличить количество"
+                                disabled={isMaxQuantity}
+                                onClick={() => addToCart(product)}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              className="btn btn-dark"
+                              type="button"
+                              onClick={() => addToCart(product)}
+                            >
+                              В корзину
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </section>
+            )}
+          </div>
+        </div>
 
         {toast && (
           <div className={`toast-message toast-${toast.type}`}>

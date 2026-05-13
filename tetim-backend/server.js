@@ -175,6 +175,24 @@ async function initDatabase() {
     )
   `);
 
+  await run(`
+  CREATE TABLE IF NOT EXISTS page_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    page TEXT DEFAULT 'home',
+    type TEXT NOT NULL,
+    title TEXT,
+    subtitle TEXT,
+    content_json TEXT,
+    image_url TEXT,
+    background_color TEXT DEFAULT '#ffffff',
+    text_color TEXT DEFAULT '#111111',
+    sort_order INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
   await addColumnIfNotExists('products', 'external_id', 'TEXT');
   await addColumnIfNotExists('products', 'article', 'TEXT');
   await addColumnIfNotExists('products', 'sizes', 'TEXT');
@@ -201,6 +219,8 @@ async function initDatabase() {
   await seedProducts();
   await seedSlides();
   await seedSiteSettings();
+  await seedPageBlocks();
+
 }
 
 async function seedAdmin() {
@@ -401,6 +421,120 @@ async function seedSiteSettings() {
         [key, value]
       );
     }
+  }
+}
+
+async function seedPageBlocks() {
+  const countRow = await get(
+    `SELECT COUNT(*) as count FROM page_blocks WHERE page = ?`,
+    ['home']
+  );
+
+  if (countRow.count > 0) {
+    return;
+  }
+
+  const blocks = [
+    {
+      page: 'home',
+      type: 'hero',
+      title: 'Одежда с характером Севера',
+      subtitle:
+        'Создаём одежду для города, спорта и активной жизни — с вниманием к деталям, комфорту и северному характеру.',
+      image_url: '',
+      background_color: '#ffffff',
+      text_color: '#111111',
+      sort_order: 1,
+      content_json: JSON.stringify({
+        badge: 'Новая коллекция',
+        buttonText: 'Каталог',
+        buttonLink: '/catalog',
+        secondButtonText: 'Индивидуальный заказ',
+        secondButtonLink: '/custom-order',
+      }),
+    },
+    {
+      page: 'home',
+      type: 'categories',
+      title: 'Популярные категории',
+      subtitle: '',
+      image_url: '',
+      background_color: '#f4f0e8',
+      text_color: '#111111',
+      sort_order: 2,
+      content_json: JSON.stringify({
+        items: [
+          { title: 'Худи', link: '/catalog?category=sweatshirts' },
+          { title: 'Футболки', link: '/catalog?category=tshirts-longsleeves' },
+          { title: 'Куртки', link: '/catalog?category=jackets' },
+          { title: 'Рубашки', link: '/catalog?category=shirts' },
+        ],
+      }),
+    },
+    {
+      page: 'home',
+      type: 'products',
+      title: 'Хиты продаж',
+      subtitle: '',
+      image_url: '',
+      background_color: '#f4f0e8',
+      text_color: '#111111',
+      sort_order: 3,
+      content_json: JSON.stringify({
+        limit: 8,
+        buttonText: 'Смотреть все',
+        buttonLink: '/catalog',
+      }),
+    },
+    {
+      page: 'home',
+      type: 'text_image',
+      title: 'TETIM',
+      subtitle: 'О бренде',
+      image_url: '/assets/custom-team-banner.jpg',
+      background_color: '#ffffff',
+      text_color: '#111111',
+      sort_order: 4,
+      content_json: JSON.stringify({
+        text:
+          'TETIM — бренд одежды для города, спорта и активной жизни. Мы соединяем комфорт, практичность и северный характер.',
+        buttonText: 'В каталог',
+        buttonLink: '/catalog',
+      }),
+    },
+  ];
+
+  for (const block of blocks) {
+    await run(
+      `
+      INSERT INTO page_blocks (
+        page,
+        type,
+        title,
+        subtitle,
+        content_json,
+        image_url,
+        background_color,
+        text_color,
+        sort_order,
+        is_active,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `,
+      [
+        block.page,
+        block.type,
+        block.title,
+        block.subtitle,
+        block.content_json,
+        block.image_url,
+        block.background_color,
+        block.text_color,
+        block.sort_order,
+        1,
+      ]
+    );
   }
 }
 
