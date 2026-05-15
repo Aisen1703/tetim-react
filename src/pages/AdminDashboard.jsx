@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import Header from '../components/Header.jsx';
@@ -6,11 +6,7 @@ import Footer from '../components/Footer.jsx';
 
 const API_URL = 'http://localhost:4000/api';
 
-const SLIDES_MIN = 3;
-const SLIDES_MAX = 10;
-const VIDEO_MAX_SECONDS = 60;
-
-const PRODUCT_CATEGORIES = [
+const CATEGORIES = [
   { value: 'accessories', label: 'Аксессуары' },
   { value: 'sale', label: 'Акционные товары' },
   { value: 'pants-shorts', label: 'Брюки и Шорты' },
@@ -29,13 +25,24 @@ const PRODUCT_CATEGORIES = [
   { value: 'belts', label: 'Ремни' },
 ];
 
+const BLOCK_TYPES = [
+  { value: 'hero', label: 'Главный экран' },
+  { value: 'slider', label: 'Слайдер' },
+  { value: 'categories', label: 'Категории' },
+  { value: 'products', label: 'Товары' },
+  { value: 'text_image', label: 'Текст + фото' },
+  { value: 'banner', label: 'Баннер' },
+  { value: 'contacts', label: 'Контакты' },
+  { value: 'footer', label: 'Footer' },
+];
+
 const emptyProductForm = {
   external_id: '',
   article: '',
   name: '',
   category: '',
   price: '',
-  sizes: '',
+  sizes: 'S, M, L',
   stock: '',
   image_url: '',
   description: '',
@@ -51,24 +58,17 @@ const emptySlideForm = {
   is_active: true,
 };
 
-const defaultSiteSettings = {
-  site_title: 'TETIM',
-  logo_url: '/assets/logo-full.png',
-  logo_white_url: '/assets/logo-full-white.png',
-  hero_badge: 'Новая коллекция',
-  hero_title: 'Функциональная одежда для города, спорта и outdoor',
-  hero_text: 'Структура сайта как у большого интернет-магазина: удобный каталог, отдельная корзина, подборки и категории.',
-  hero_button_primary: 'Каталог',
-  hero_button_secondary: 'Индивидуальный заказ',
-  footer_text: '© 2026 TETIM. Все права защищены.',
-  phone: '+7 999 060 00 75',
-  email: 'info@tetim.ru',
-  address: 'Якутск',
-  telegram_url: '',
-  whatsapp_url: '',
-  instagram_url: '',
-  accent_color: '#111111',
-  background_color: '#f4f0e8',
+const emptyBlockForm = {
+  page: 'home',
+  type: 'hero',
+  title: '',
+  subtitle: '',
+  image_url: '',
+  background_color: '#ffffff',
+  text_color: '#111111',
+  sort_order: 1,
+  is_active: true,
+  content_json: '{}',
 };
 
 function formatPrice(value) {
@@ -76,92 +76,192 @@ function formatPrice(value) {
 }
 
 function getCategoryLabel(value) {
-  const category = PRODUCT_CATEGORIES.find((item) => item.value === value);
-  return category ? category.label : value || '—';
+  return CATEGORIES.find((item) => item.value === value)?.label || value || 'Каталог';
 }
 
-function getStatusLabel(status) {
-  const labels = {
-    new: 'Новый',
-    processing: 'В обработке',
-    shipped: 'Отправлен',
-    done: 'Завершён',
-    cancelled: 'Отменён',
-    exported_to_1c: 'Выгружен в 1С',
-  };
+function getBlockTypeLabel(value) {
+  return BLOCK_TYPES.find((item) => item.value === value)?.label || value || 'Блок';
+}
 
-  return labels[status] || status || '—';
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function getDefaultJsonByType(type) {
+  if (type === 'slider') {
+    return JSON.stringify(
+      {
+        source: 'admin_slides',
+        autoplay: true,
+        interval: 4000,
+        showDots: true,
+      },
+      null,
+      2
+    );
+  }
+
+  if (type === 'hero') {
+    return JSON.stringify(
+      {
+        badge: 'Новая коллекция',
+        buttonText: 'Каталог',
+        buttonLink: '/catalog',
+        secondButtonText: 'Индивидуальный заказ',
+        secondButtonLink: '/custom-order',
+      },
+      null,
+      2
+    );
+  }
+
+  if (type === 'categories') {
+    return JSON.stringify(
+      {
+        items: [
+          { title: 'Худи', link: '/catalog?category=sweatshirts' },
+          { title: 'Футболки', link: '/catalog?category=tshirts-longsleeves' },
+          { title: 'Куртки', link: '/catalog?category=jackets' },
+        ],
+      },
+      null,
+      2
+    );
+  }
+
+  if (type === 'products') {
+    return JSON.stringify(
+      {
+        limit: 8,
+        buttonText: 'Смотреть все',
+        buttonLink: '/catalog',
+      },
+      null,
+      2
+    );
+  }
+
+  if (type === 'text_image' || type === 'banner') {
+    return JSON.stringify(
+      {
+        text: 'Текст блока',
+        buttonText: 'Подробнее',
+        buttonLink: '/catalog',
+      },
+      null,
+      2
+    );
+  }
+
+  if (type === 'contacts') {
+    return JSON.stringify(
+      {
+        phone: '+7 999 060 00 75',
+        email: 'info@tetim.ru',
+        address: 'Якутск',
+      },
+      null,
+      2
+    );
+  }
+
+  return '{}';
 }
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
 
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token') || '';
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+  const headers = useMemo(
+    () => ({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    }),
+    [token]
+  );
 
   const [activeTab, setActiveTab] = useState('products');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [previewMode, setPreviewMode] = useState('desktop');
+  const [builderPreviewOpen, setBuilderPreviewOpen] = useState(false);
+
   const [users, setUsers] = useState([]);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [slides, setSlides] = useState([]);
+  const [pageBlocks, setPageBlocks] = useState([]);
 
+  const [productForm, setProductForm] = useState(emptyProductForm);
+  const [editProductId, setEditProductId] = useState(null);
+  const [editProductForm, setEditProductForm] = useState(emptyProductForm);
+
+  const [slideForm, setSlideForm] = useState(emptySlideForm);
+  const [selectedBlockId, setSelectedBlockId] = useState(null);
+  const [blockForm, setBlockForm] = useState(emptyBlockForm);
+  const [themeForm, setThemeForm] = useState({
+    site_theme: 'auto',
+    holiday_theme_enabled: '1',
+    header_ornament_url: '/assets/sakha-ornament.png',
+    background_pattern_url: '',
+    decor_image_url: '',
+    snow_enabled: '0',
+    newyear_theme_start: '2026-01-01',
+    newyear_theme_end: '2026-01-08',
+    defender_theme_start: '2026-02-23',
+    defender_theme_end: '2026-02-23',
+    womens_theme_start: '2026-03-08',
+    womens_theme_end: '2026-03-08',
+    republic_theme_start: '2026-04-27',
+    republic_theme_end: '2026-04-27',
+    ysyakh_theme_start: '2026-06-21',
+    ysyakh_theme_end: '2026-06-21',
+    statehood_theme_start: '2026-09-27',
+    statehood_theme_end: '2026-09-27',
+  });
+
+  const [productSearch, setProductSearch] = useState('');
   const [message, setMessage] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
-  const [productUploadText, setProductUploadText] = useState('');
-  const [slideUploadText, setSlideUploadText] = useState('');
-  const [productSearch, setProductSearch] = useState('');
-  const [orderSearch, setOrderSearch] = useState('');
+  const builderEditorRef = useRef(null);
 
-  const [form, setForm] = useState(emptyProductForm);
-  const [editForm, setEditForm] = useState(emptyProductForm);
-  const [editingProductId, setEditingProductId] = useState(null);
-  const [slideForm, setSlideForm] = useState(emptySlideForm);
-  const [siteSettings, setSiteSettings] = useState(defaultSiteSettings);
-  const [settingsUploadText, setSettingsUploadText] = useState('');
+  const stats = useMemo(() => {
+    const published = products.filter((item) => Number(item.is_published) === 1).length;
+    const drafts = products.length - published;
+    const newOrders = orders.filter((item) => item.status === 'new').length;
 
-  const draftProducts = products.filter((item) => !Number(item.is_published));
-  const publishedProducts = products.filter((item) => Number(item.is_published));
-  const newOrders = orders.filter((item) => item.status === 'new');
+    return {
+      totalProducts: products.length,
+      published,
+      drafts,
+      newOrders,
+    };
+  }, [products, orders]);
 
   const filteredProducts = useMemo(() => {
-    const query = productSearch.trim().toLowerCase();
+    const text = productSearch.trim().toLowerCase();
 
-    if (!query) return products;
+    if (!text) {
+      return products;
+    }
 
     return products.filter((product) => {
       return (
-        String(product.name || '').toLowerCase().includes(query) ||
-        String(product.article || '').toLowerCase().includes(query) ||
-        String(product.external_id || '').toLowerCase().includes(query) ||
-        String(product.category || '').toLowerCase().includes(query)
+        String(product.name || '').toLowerCase().includes(text) ||
+        String(product.article || '').toLowerCase().includes(text) ||
+        String(product.external_id || '').toLowerCase().includes(text) ||
+        String(product.category || '').toLowerCase().includes(text)
       );
     });
   }, [products, productSearch]);
 
-  const filteredOrders = useMemo(() => {
-    const query = orderSearch.trim().toLowerCase();
-
-    if (!query) return orders;
-
-    return orders.filter((order) => {
-      return (
-        String(order.id || '').includes(query) ||
-        String(order.customer_name || '').toLowerCase().includes(query) ||
-        String(order.phone || '').toLowerCase().includes(query) ||
-        String(order.email || '').toLowerCase().includes(query)
-      );
-    });
-  }, [orders, orderSearch]);
-
   useEffect(() => {
-    if (!token || !user || user.role !== 'admin') {
+    if (!token || user?.role !== 'admin') {
       navigate('/');
       return;
     }
@@ -175,7 +275,8 @@ export default function AdminDashboard() {
       loadProducts(),
       loadOrders(),
       loadSlides(),
-      loadSettings(),
+      loadPageBlocks(),
+      loadThemeSettings(),
     ]);
   }
 
@@ -184,24 +285,14 @@ export default function AdminDashboard() {
 
     setTimeout(() => {
       setMessage(null);
-    }, 3500);
-  }
-
-  async function safeJson(response) {
-    const text = await response.text();
-
-    try {
-      return text ? JSON.parse(text) : {};
-    } catch {
-      return {};
-    }
+    }, 2500);
   }
 
   async function loadUsers() {
     try {
       const response = await fetch(`${API_URL}/admin/users`, { headers });
-      const data = await response.json();
-      if (response.ok) setUsers(data.users || []);
+      const data = await safeJson(response);
+      setUsers(response.ok ? data.users || [] : []);
     } catch {
       setUsers([]);
     }
@@ -210,8 +301,8 @@ export default function AdminDashboard() {
   async function loadProducts() {
     try {
       const response = await fetch(`${API_URL}/admin/products`, { headers });
-      const data = await response.json();
-      if (response.ok) setProducts(data.products || []);
+      const data = await safeJson(response);
+      setProducts(response.ok ? data.products || [] : []);
     } catch {
       setProducts([]);
     }
@@ -220,8 +311,8 @@ export default function AdminDashboard() {
   async function loadOrders() {
     try {
       const response = await fetch(`${API_URL}/admin/orders`, { headers });
-      const data = await response.json();
-      if (response.ok) setOrders(data.orders || []);
+      const data = await safeJson(response);
+      setOrders(response.ok ? data.orders || [] : []);
     } catch {
       setOrders([]);
     }
@@ -229,97 +320,208 @@ export default function AdminDashboard() {
 
   async function loadSlides() {
     try {
-      const response = await fetch(`${API_URL}/public/slides`);
-      const data = await response.json();
-
-      if (response.ok) {
-        setSlides(data.slides || []);
-        return;
-      }
-
-      setSlides([]);
-    } catch (error) {
-      console.error('Ошибка загрузки слайдов:', error);
+      const response = await fetch(`${API_URL}/admin/slides`, { headers });
+      const data = await safeJson(response);
+      setSlides(response.ok ? data.slides || [] : []);
+    } catch {
       setSlides([]);
     }
   }
 
-  async function loadSettings() {
+  async function loadThemeSettings() {
     try {
-      const response = await fetch(`${API_URL}/public/settings`);
-      const data = await response.json();
+      const response = await fetch(`${API_URL}/admin/settings`, { headers });
+      const data = await safeJson(response);
 
       if (response.ok) {
-        setSiteSettings({ ...defaultSiteSettings, ...(data.settings || {}) });
+        setThemeForm((prev) => ({
+          ...prev,
+          ...(data.settings || {}),
+        }));
       }
     } catch {
-      setSiteSettings(defaultSiteSettings);
+      showMessage('Не удалось загрузить оформление', 'error');
     }
   }
 
-  function handleSettingChange(event) {
-    const { name, value } = event.target;
-    setSiteSettings((prev) => ({ ...prev, [name]: value }));
-  }
-
-  async function saveSettings(event) {
-    event.preventDefault();
-
+  async function saveThemeSettings() {
     try {
       const response = await fetch(`${API_URL}/admin/settings`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify({ settings: siteSettings }),
+        body: JSON.stringify({
+          settings: themeForm,
+        }),
       });
 
       const data = await safeJson(response);
 
       if (!response.ok) {
-        showMessage(data.message || 'Не удалось сохранить настройки', 'error');
+        showMessage(data.message || 'Не удалось сохранить оформление', 'error');
         return;
       }
 
-      showMessage('Настройки сайта сохранены');
-      await loadSettings();
+      showMessage('Оформление сайта сохранено');
     } catch {
-      showMessage('Не удалось сохранить настройки. Проверьте backend.', 'error');
+      showMessage('Ошибка сохранения оформления', 'error');
     }
   }
 
-  async function uploadSiteLogo(event, fieldName) {
+  async function uploadThemeImage(event, fieldName) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setSettingsUploadText('Можно загрузить только изображение.');
-      event.target.value = '';
+    try {
+      const data = await uploadFile(file);
+
+      setThemeForm((prev) => ({
+        ...prev,
+        [fieldName]: data.url,
+      }));
+
+      showMessage('Рисунок загружен');
+    } catch (error) {
+      showMessage(error.message || 'Не удалось загрузить рисунок', 'error');
+    }
+  }
+
+  async function loadPageBlocks() {
+    try {
+      const response = await fetch(`${API_URL}/admin/page-blocks?page=home`, { headers });
+      const data = await safeJson(response);
+
+      if (response.ok) {
+        const blocks = data.blocks || [];
+        setPageBlocks(blocks);
+
+        if (!selectedBlockId && blocks.length > 0) {
+          selectBlock(blocks[0]);
+        }
+      } else {
+        setPageBlocks([]);
+      }
+    } catch {
+      setPageBlocks([]);
+    }
+  }
+
+  function handleProductChange(event, target = 'new') {
+    const { name, value } = event.target;
+
+    if (target === 'edit') {
+      setEditProductForm((prev) => ({ ...prev, [name]: value }));
       return;
     }
 
-    setSettingsUploadText('Загрузка логотипа...');
+    setProductForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_URL}/admin/upload`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await safeJson(response);
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Ошибка загрузки файла');
+    }
+
+    return data;
+  }
+
+  async function uploadProductImage(event, target = 'new') {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
     try {
       const data = await uploadFile(file);
-      setSiteSettings((prev) => ({ ...prev, [fieldName]: data.url }));
-      setSettingsUploadText('Логотип загружен. Нажмите “Сохранить настройки”.');
+
+      if (target === 'edit') {
+        setEditProductForm((prev) => ({ ...prev, image_url: data.url }));
+      } else {
+        setProductForm((prev) => ({ ...prev, image_url: data.url }));
+      }
+
+      showMessage('Фото товара загружено');
     } catch (error) {
-      setSettingsUploadText(error.message || 'Не удалось загрузить логотип');
+      showMessage(error.message || 'Не удалось загрузить фото', 'error');
     }
   }
 
-  function handleChange(event) {
-    const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+  async function importProductsFromExcel(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/products/import`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        showMessage(data.message || 'Не удалось импортировать товары', 'error');
+        return;
+      }
+
+      showMessage(
+        `Импорт готов: добавлено ${data.created || 0}, обновлено ${data.updated || 0}, пропущено ${data.skipped || 0}`
+      );
+
+      await loadProducts();
+    } catch {
+      showMessage('Ошибка импорта Excel', 'error');
+    } finally {
+      event.target.value = '';
+    }
   }
 
-  function handleEditChange(event) {
-    const { name, value } = event.target;
-    setEditForm((prev) => ({ ...prev, [name]: value }));
+  async function createProduct(event) {
+    event.preventDefault();
+
+    try {
+      const response = await fetch(`${API_URL}/admin/products`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(productForm),
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        showMessage(data.message || 'Не удалось добавить товар', 'error');
+        return;
+      }
+
+      showMessage('Товар добавлен');
+      setProductForm(emptyProductForm);
+      await loadProducts();
+    } catch {
+      showMessage('Ошибка добавления товара', 'error');
+    }
   }
 
   function startEditProduct(product) {
-    setEditingProductId(product.id);
-    setEditForm({
+    setEditProductId(product.id);
+    setEditProductForm({
       external_id: product.external_id || '',
       article: product.article || '',
       name: product.name || '',
@@ -330,184 +532,73 @@ export default function AdminDashboard() {
       image_url: product.image_url || '',
       description: product.description || '',
     });
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function cancelEditProduct() {
-    setEditingProductId(null);
-    setEditForm(emptyProductForm);
-  }
-
-  function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/');
-  }
-
-  function getVideoDuration(file) {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement('video');
-      const url = URL.createObjectURL(file);
-
-      video.preload = 'metadata';
-      video.onloadedmetadata = () => {
-        URL.revokeObjectURL(url);
-        resolve(video.duration);
-      };
-      video.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('Не удалось прочитать длительность видео'));
-      };
-      video.src = url;
-    });
-  }
-
-  async function uploadFile(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await fetch(`${API_URL}/admin/upload`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Ошибка загрузки файла');
-    }
-
-    return data;
-  }
-
-  async function uploadProductPhoto(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setProductUploadText('Для товара можно загрузить только фото.');
-      event.target.value = '';
-      return;
-    }
-
-    setProductUploadText('Загрузка фото...');
-
-    try {
-      const data = await uploadFile(file);
-      setForm((prev) => ({ ...prev, image_url: data.url }));
-      setProductUploadText('Фото загружено');
-    } catch (error) {
-      setProductUploadText(error.message || 'Не удалось загрузить фото');
-    }
-  }
-
-  async function uploadEditProductPhoto(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      showMessage('Для товара можно загрузить только фото.', 'warning');
-      event.target.value = '';
-      return;
-    }
-
-    showMessage('Загрузка фото...', 'info');
-
-    try {
-      const data = await uploadFile(file);
-      setEditForm((prev) => ({ ...prev, image_url: data.url }));
-      showMessage('Фото загружено. Нажмите “Сохранить”.');
-    } catch (error) {
-      showMessage(error.message || 'Не удалось загрузить фото', 'error');
-    }
-  }
-
-  function makeProductPayload(source) {
-    return {
-      external_id: String(source.external_id || '').trim(),
-      article: String(source.article || '').trim(),
-      name: String(source.name || '').trim(),
-      category: String(source.category || '').trim(),
-      price: Number(source.price || 0),
-      sizes: String(source.sizes || '').trim(),
-      stock: Number(source.stock || 0),
-      image_url: String(source.image_url || '').trim(),
-      description: String(source.description || '').trim(),
-    };
-  }
-
-  function validateProductPayload(payload) {
-    if (!payload.name) return 'Введите название товара';
-    if (!payload.category) return 'Выберите категорию товара';
-    if (!payload.price || payload.price <= 0) return 'Введите цену товара';
-    return '';
-  }
-
-  async function addProduct(event) {
+  async function saveProductEdit(event) {
     event.preventDefault();
 
-    const payload = makeProductPayload(form);
-    const errorText = validateProductPayload(payload);
-
-    if (errorText) {
-      showMessage(errorText, 'warning');
-      return;
-    }
-
     try {
-      const response = await fetch(`${API_URL}/admin/products`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
-
-      const data = await safeJson(response);
-
-      if (!response.ok) {
-        showMessage(data.message || 'Ошибка добавления товара', 'error');
-        return;
-      }
-
-      showMessage('Товар добавлен. Теперь его можно опубликовать.');
-      setForm(emptyProductForm);
-      setProductUploadText('');
-      await loadProducts();
-    } catch {
-      showMessage('Не удалось добавить товар. Проверьте backend.', 'error');
-    }
-  }
-
-  async function saveEditProduct(id) {
-    const payload = makeProductPayload(editForm);
-    const errorText = validateProductPayload(payload);
-
-    if (errorText) {
-      showMessage(errorText, 'warning');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/admin/products/${id}`, {
+      const response = await fetch(`${API_URL}/admin/products/${editProductId}`, {
         method: 'PATCH',
         headers,
-        body: JSON.stringify(payload),
+        body: JSON.stringify(editProductForm),
       });
 
       const data = await safeJson(response);
 
       if (!response.ok) {
-        showMessage(data.message || 'Ошибка сохранения товара', 'error');
+        showMessage(data.message || 'Не удалось сохранить товар', 'error');
         return;
       }
 
       showMessage('Товар сохранён');
-      setEditingProductId(null);
-      setEditForm(emptyProductForm);
+      setEditProductId(null);
+      setEditProductForm(emptyProductForm);
       await loadProducts();
     } catch {
-      showMessage('Не удалось сохранить товар. Проверьте backend.', 'error');
+      showMessage('Ошибка сохранения товара', 'error');
+    }
+  }
+
+  async function publishProduct(id) {
+    try {
+      const response = await fetch(`${API_URL}/admin/products/${id}/publish`, {
+        method: 'PATCH',
+        headers,
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        showMessage(data.message || 'Не удалось опубликовать', 'error');
+        return;
+      }
+
+      showMessage('Товар опубликован');
+      await loadProducts();
+    } catch {
+      showMessage('Ошибка публикации', 'error');
+    }
+  }
+
+  async function unpublishProduct(id) {
+    try {
+      const response = await fetch(`${API_URL}/admin/products/${id}/unpublish`, {
+        method: 'PATCH',
+        headers,
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        showMessage(data.message || 'Не удалось снять товар', 'error');
+        return;
+      }
+
+      showMessage('Товар снят с публикации');
+      await loadProducts();
+    } catch {
+      showMessage('Ошибка снятия товара', 'error');
     }
   }
 
@@ -534,130 +625,38 @@ export default function AdminDashboard() {
       const data = await safeJson(response);
 
       if (!response.ok) {
-        showMessage(data.message || 'Ошибка удаления товара', 'error');
+        showMessage(data.message || 'Не удалось удалить товар', 'error');
         return;
       }
 
       showMessage('Товар удалён');
       await loadProducts();
     } catch {
-      showMessage('Не удалось удалить товар', 'error');
+      showMessage('Ошибка удаления товара', 'error');
     }
   }
 
-  async function publishProduct(id) {
-    try {
-      const response = await fetch(`${API_URL}/admin/products/${id}/publish`, {
-        method: 'PATCH',
-        headers,
-      });
-
-      const data = await safeJson(response);
-
-      if (!response.ok) {
-        showMessage(data.message || 'Ошибка публикации', 'error');
-        return;
-      }
-
-      showMessage('Товар опубликован');
-      await loadProducts();
-    } catch {
-      showMessage('Не удалось опубликовать товар', 'error');
-    }
-  }
-
-  async function unpublishProduct(id) {
-    try {
-      const response = await fetch(`${API_URL}/admin/products/${id}/unpublish`, {
-        method: 'PATCH',
-        headers,
-      });
-
-      const data = await safeJson(response);
-
-      if (!response.ok) {
-        showMessage(data.message || 'Ошибка снятия товара', 'error');
-        return;
-      }
-
-      showMessage('Товар снят с публикации');
-      await loadProducts();
-    } catch {
-      showMessage('Не удалось снять товар', 'error');
-    }
-  }
-
-  async function changeOrderStatus(id, status) {
-    try {
-      const response = await fetch(`${API_URL}/admin/orders/${id}/status`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ status }),
-      });
-
-      if (!response.ok) {
-        showMessage('Не удалось изменить статус', 'error');
-        return;
-      }
-
-      showMessage('Статус заказа изменён');
-      await loadOrders();
-    } catch {
-      showMessage('Не удалось изменить статус', 'error');
-    }
-  }
-
-  async function uploadSlideFile(event) {
+  async function uploadSlideMedia(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (slides.length >= SLIDES_MAX) {
-      setSlideUploadText(`Нельзя добавить больше ${SLIDES_MAX} слайдов.`);
-      event.target.value = '';
-      return;
-    }
-
-    const isVideo = file.type.startsWith('video/');
-
-    if (isVideo) {
-      try {
-        setSlideUploadText('Проверяем длительность видео...');
-        const duration = await getVideoDuration(file);
-
-        if (duration > VIDEO_MAX_SECONDS) {
-          setSlideUploadText('Видео должно быть не длиннее 1 минуты.');
-          event.target.value = '';
-          return;
-        }
-      } catch {
-        setSlideUploadText('Не удалось проверить видео. Выберите другой файл.');
-        event.target.value = '';
-        return;
-      }
-    }
-
-    setSlideUploadText('Загрузка файла...');
-
     try {
       const data = await uploadFile(file);
+
       setSlideForm((prev) => ({
         ...prev,
         image_url: data.url,
-        media_type: data.media_type,
+        media_type: data.media_type || prev.media_type,
       }));
-      setSlideUploadText('Файл загружен');
+
+      showMessage('Файл слайда загружен');
     } catch (error) {
-      setSlideUploadText(error.message || 'Не удалось загрузить файл');
+      showMessage(error.message || 'Не удалось загрузить слайд', 'error');
     }
   }
 
-  async function addSlide(event) {
+  async function createSlide(event) {
     event.preventDefault();
-
-    if (slides.length >= SLIDES_MAX) {
-      setSlideUploadText(`Нельзя добавить больше ${SLIDES_MAX} слайдов.`);
-      return;
-    }
 
     try {
       const response = await fetch(`${API_URL}/admin/slides`, {
@@ -669,71 +668,263 @@ export default function AdminDashboard() {
       const data = await safeJson(response);
 
       if (!response.ok) {
-        setSlideUploadText(data.message || 'Ошибка добавления слайда');
+        showMessage(data.message || 'Не удалось добавить слайд', 'error');
         return;
       }
 
-      setSlideForm(emptySlideForm);
-      setSlideUploadText('');
       showMessage('Слайд добавлен');
+      setSlideForm(emptySlideForm);
       await loadSlides();
     } catch {
-      setSlideUploadText('Не удалось добавить слайд');
+      showMessage('Ошибка добавления слайда', 'error');
     }
   }
 
   async function deleteSlide(id) {
-    if (slides.length <= SLIDES_MIN) {
-      setSlideUploadText(`Нельзя оставить меньше ${SLIDES_MIN} слайдов.`);
-      return;
-    }
+    setConfirmModal({
+      title: 'Удалить слайд?',
+      text: 'Слайд будет удалён с главного баннера.',
+      confirmText: 'Удалить',
+      cancelText: 'Отмена',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(null);
 
+        try {
+          const response = await fetch(`${API_URL}/admin/slides/${id}`, {
+            method: 'DELETE',
+            headers,
+          });
+
+          const data = await safeJson(response);
+
+          if (!response.ok) {
+            showMessage(data.message || 'Не удалось удалить слайд', 'error');
+            return;
+          }
+
+          showMessage('Слайд удалён');
+          await loadSlides();
+        } catch {
+          showMessage('Ошибка удаления слайда', 'error');
+        }
+      },
+    });
+  }
+
+  async function updateOrderStatus(orderId, status) {
     try {
-      const response = await fetch(`${API_URL}/admin/slides/${id}`, {
-        method: 'DELETE',
+      const response = await fetch(`${API_URL}/admin/orders/${orderId}/status`, {
+        method: 'PATCH',
         headers,
+        body: JSON.stringify({ status }),
       });
 
       const data = await safeJson(response);
 
       if (!response.ok) {
-        setSlideUploadText(data.message || 'Ошибка удаления слайда');
+        showMessage(data.message || 'Не удалось изменить статус', 'error');
         return;
       }
 
-      showMessage('Слайд удалён');
-      await loadSlides();
+      showMessage('Статус заказа изменён');
+      await loadOrders();
     } catch {
-      setSlideUploadText('Не удалось удалить слайд');
+      showMessage('Ошибка изменения статуса', 'error');
     }
   }
 
-  function renderProductForm({ mode }) {
-    const isEdit = mode === 'edit';
-    const values = isEdit ? editForm : form;
-    const onChange = isEdit ? handleEditChange : handleChange;
+  function selectBlock(block) {
+    setSelectedBlockId(block.id);
 
-    return (
-      <div className="admin-form-grid">
-        <input name="external_id" value={values.external_id} onChange={onChange} placeholder="ID из 1С" />
-        <input name="article" value={values.article} onChange={onChange} placeholder="Артикул" />
-        <input name="name" value={values.name} onChange={onChange} placeholder="Название товара" required />
+    let prettyJson = block.content_json || '{}';
 
-        <select name="category" value={values.category} onChange={onChange} required>
-          <option value="">Категория</option>
-          {PRODUCT_CATEGORIES.map((category) => (
-            <option key={category.value} value={category.value}>{category.label}</option>
-          ))}
-        </select>
+    try {
+      prettyJson = JSON.stringify(JSON.parse(prettyJson), null, 2);
+    } catch {
+      prettyJson = block.content_json || '{}';
+    }
 
-        <input name="price" type="number" value={values.price} onChange={onChange} placeholder="Цена" required />
-        <input name="stock" type="number" value={values.stock} onChange={onChange} placeholder="Остаток" />
-        <input name="sizes" value={values.sizes} onChange={onChange} placeholder="Размеры: S, M, L" />
-        <input name="image_url" value={values.image_url} onChange={onChange} placeholder="Ссылка на фото" />
+    setBlockForm({
+      page: block.page || 'home',
+      type: block.type || 'hero',
+      title: block.title || '',
+      subtitle: block.subtitle || '',
+      image_url: block.image_url || '',
+      background_color: block.background_color || '#ffffff',
+      text_color: block.text_color || '#111111',
+      sort_order: Number(block.sort_order || 0),
+      is_active: Number(block.is_active) === 1,
+      content_json: prettyJson,
+    });
 
-        <textarea name="description" value={values.description} onChange={onChange} placeholder="Описание товара" />
-      </div>
-    );
+    setTimeout(() => {
+      builderEditorRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 80);
+  }
+
+  function createEmptyBlock(type = 'text_image') {
+    const nextOrder =
+      pageBlocks.length > 0
+        ? Math.max(...pageBlocks.map((item) => Number(item.sort_order || 0))) + 1
+        : 1;
+
+    setActiveTab('builder');
+    setSelectedBlockId(null);
+    setBlockForm({
+      ...emptyBlockForm,
+      type,
+      sort_order: nextOrder,
+      title: getBlockTypeLabel(type),
+      content_json: getDefaultJsonByType(type),
+    });
+
+    setTimeout(() => {
+      builderEditorRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 80);
+  }
+
+  function handleBlockTypeChange(type) {
+    setBlockForm((prev) => ({
+      ...prev,
+      type,
+      title: prev.title || getBlockTypeLabel(type),
+      content_json: getDefaultJsonByType(type),
+    }));
+  }
+
+  async function savePageBlock(event) {
+    event.preventDefault();
+
+    let parsed = {};
+
+    try {
+      parsed = JSON.parse(blockForm.content_json || '{}');
+    } catch {
+      showMessage('JSON блока заполнен неправильно', 'error');
+      return;
+    }
+
+    const payload = {
+      ...blockForm,
+      content_json: JSON.stringify(parsed),
+      is_active: blockForm.is_active,
+    };
+
+    const url = selectedBlockId
+      ? `${API_URL}/admin/page-blocks/${selectedBlockId}`
+      : `${API_URL}/admin/page-blocks`;
+
+    const method = selectedBlockId ? 'PATCH' : 'POST';
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        showMessage(data.message || 'Не удалось сохранить блок', 'error');
+        return;
+      }
+
+      showMessage(selectedBlockId ? 'Блок сохранён' : 'Блок добавлен');
+      await loadPageBlocks();
+    } catch {
+      showMessage('Ошибка сохранения блока', 'error');
+    }
+  }
+
+  async function uploadBlockImage(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await uploadFile(file);
+
+      setBlockForm((prev) => ({
+        ...prev,
+        image_url: data.url,
+      }));
+
+      showMessage('Изображение блока загружено');
+    } catch (error) {
+      showMessage(error.message || 'Не удалось загрузить изображение', 'error');
+    }
+  }
+
+  function deletePageBlock(id) {
+    setConfirmModal({
+      title: 'Удалить блок?',
+      text: 'Блок будет удалён со страницы без восстановления.',
+      confirmText: 'Удалить',
+      cancelText: 'Отмена',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmModal(null);
+
+        try {
+          const response = await fetch(`${API_URL}/admin/page-blocks/${id}`, {
+            method: 'DELETE',
+            headers,
+          });
+
+          const data = await safeJson(response);
+
+          if (!response.ok) {
+            showMessage(data.message || 'Не удалось удалить блок', 'error');
+            return;
+          }
+
+          showMessage('Блок удалён');
+          setSelectedBlockId(null);
+          await loadPageBlocks();
+        } catch {
+          showMessage('Ошибка удаления блока', 'error');
+        }
+      },
+    });
+  }
+
+  async function moveBlock(block, direction) {
+    if (!block) return;
+
+    const nextOrder = Number(block.sort_order || 0) + direction;
+
+    if (nextOrder < 1) return;
+
+    try {
+      const response = await fetch(`${API_URL}/admin/page-blocks/${block.id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          ...block,
+          sort_order: nextOrder,
+          is_active: Number(block.is_active) === 1,
+        }),
+      });
+
+      if (response.ok) {
+        await loadPageBlocks();
+      }
+    } catch {
+      showMessage('Не удалось изменить порядок', 'error');
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/');
   }
 
   return (
@@ -741,184 +932,143 @@ export default function AdminDashboard() {
       <Header cartCount={0} />
 
       <main className="admin-page">
-      <div className={`admin-shell ${sidebarOpen ? '' : 'sidebar-hidden'}`}>
-        {!sidebarOpen && (
-          <button
-            type="button"
-            className="admin-sidebar-open"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Показать меню"
-          >
-            ☰
-          </button>
-        )}
-
-        <aside className={`admin-sidebar ${sidebarOpen ? '' : 'hidden'}`}>
-          <button
-            type="button"
-            className="admin-sidebar-close"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Скрыть меню"
-          >
-            ‹
-          </button>
-          <div className="admin-brand">
-            <div className="admin-logo">T</div>
-            <div>
-              <strong>TETIM</strong>
-              <span>Админ-панель</span>
-            </div>
-          </div>
-
-          <nav className="admin-nav">
-            <button className={activeTab === 'products' ? 'active' : ''} onClick={() => setActiveTab('products')}>Товары</button>
-            <button className={activeTab === 'orders' ? 'active' : ''} onClick={() => setActiveTab('orders')}>Заказы</button>
-            <button className={activeTab === 'slides' ? 'active' : ''} onClick={() => setActiveTab('slides')}>Слайды</button>
-            <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>Клиенты</button>
-            <button className={activeTab === 'preview' ? 'active' : ''} onClick={() => setActiveTab('preview')}>Предпросмотр</button>
-            <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>Настройки сайта</button>
-          </nav>
-
-          <div className="admin-sidebar-footer">
-            <Link to="/" className="admin-small-link">На сайт</Link>
-            <Link to="/account" className="admin-small-link">В кабинет</Link>
-            <button type="button" onClick={logout}>Выйти</button>
-          </div>
-        </aside>
-
-        <section className="admin-content">
-          <header className="admin-topbar">
-            <div>
-              <h1>Панель управления</h1>
-              <p>Товары из 1С, публикации, заказы, клиенты и главный баннер</p>
-            </div>
-
-            <button type="button" className="btn btn-dark" onClick={loadAll}>Обновить</button>
-          </header>
-
-          {message && (
-            <div className={`admin-toast admin-toast-${message.type}`}>
-              {message.text}
-            </div>
+        <div className={`admin-shell ${sidebarOpen ? '' : 'sidebar-hidden'}`}>
+          {!sidebarOpen && (
+            <button
+              type="button"
+              className="admin-sidebar-open"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Показать меню"
+            >
+              ☰
+            </button>
           )}
 
-          {confirmModal && (
-            <div className="admin-modal-backdrop" onClick={() => setConfirmModal(null)}>
-              <div className="admin-confirm-modal" onClick={(event) => event.stopPropagation()}>
-                <div className="admin-confirm-icon">!</div>
-                <h3>{confirmModal.title}</h3>
-                <p>{confirmModal.text}</p>
+          <aside className={`admin-sidebar ${sidebarOpen ? '' : 'hidden'}`}>
+            <button
+              type="button"
+              className="admin-sidebar-close"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Скрыть меню"
+            >
+              ‹
+            </button>
 
-                <div className="admin-confirm-actions">
-                  <button
-                    type="button"
-                    className="admin-confirm-cancel"
-                    onClick={() => setConfirmModal(null)}
-                  >
-                    {confirmModal.cancelText || 'Отмена'}
-                  </button>
-
-                  <button
-                    type="button"
-                    className={confirmModal.danger ? 'admin-confirm-danger' : 'admin-confirm-ok'}
-                    onClick={confirmModal.onConfirm}
-                  >
-                    {confirmModal.confirmText || 'Подтвердить'}
-                  </button>
-                </div>
+            <div>
+              <div className="admin-brand">
+                <strong>TETIM</strong>
+                <span>Админ-панель</span>
               </div>
-            </div>
-          )}
 
-          <section className="admin-stats-grid">
-            <div className="admin-stat-card">
-              <span>Всего товаров</span>
-              <strong>{products.length}</strong>
+              <nav className="admin-nav">
+                <button className={activeTab === 'products' ? 'active' : ''} onClick={() => setActiveTab('products')}>Товары</button>
+                <button className={activeTab === 'orders' ? 'active' : ''} onClick={() => setActiveTab('orders')}>Заказы</button>
+                <button className={activeTab === 'slides' ? 'active' : ''} onClick={() => setActiveTab('slides')}>Слайды</button>
+                <button className={activeTab === 'clients' ? 'active' : ''} onClick={() => setActiveTab('clients')}>Клиенты</button>
+                <button className={activeTab === 'preview' ? 'active' : ''} onClick={() => setActiveTab('preview')}>Предпросмотр</button>
+                <button className={activeTab === 'builder' ? 'active' : ''} onClick={() => setActiveTab('builder')}>Конструктор сайта</button>
+                <button className={activeTab === 'appearance' ? 'active' : ''} onClick={() => setActiveTab('appearance')}>Оформление сайта</button>
+              </nav>
             </div>
-            <div className="admin-stat-card">
-              <span>Опубликовано</span>
-              <strong>{publishedProducts.length}</strong>
-            </div>
-            <div className="admin-stat-card">
-              <span>Черновики / 1С</span>
-              <strong>{draftProducts.length}</strong>
-            </div>
-            <div className="admin-stat-card">
-              <span>Новые заказы</span>
-              <strong>{newOrders.length}</strong>
-            </div>
-          </section>
 
-          {activeTab === 'products' && (
-            <div className="admin-grid-2">
-              <section className="admin-card">
-                <div className="admin-card-head">
-                  <div>
-                    <h2>{editingProductId ? 'Редактировать товар' : 'Добавить товар'}</h2>
-                    <p>Новые товары вручную или товары, пришедшие из 1С</p>
+            <div className="admin-sidebar-footer">
+              <Link to="/" className="admin-small-link">На сайт</Link>
+              <Link to="/account" className="admin-small-link">В кабинет</Link>
+              <button type="button" onClick={logout}>Выйти</button>
+            </div>
+          </aside>
+
+          <section className="admin-content">
+            <div className="admin-topbar">
+              <div>
+                <h1>Панель управления</h1>
+                <p>Товары из 1С, публикации, заказы, клиенты и конструктор сайта</p>
+              </div>
+
+              <button type="button" className="btn btn-dark" onClick={loadAll}>Обновить</button>
+            </div>
+
+            <div className="admin-stats-grid">
+              <div className="admin-stat-card"><span>Всего товаров</span><strong>{stats.totalProducts}</strong></div>
+              <div className="admin-stat-card"><span>Опубликовано</span><strong>{stats.published}</strong></div>
+              <div className="admin-stat-card"><span>Черновики / 1С</span><strong>{stats.drafts}</strong></div>
+              <div className="admin-stat-card"><span>Новые заказы</span><strong>{stats.newOrders}</strong></div>
+            </div>
+
+            {activeTab === 'products' && (
+              <div className="admin-grid-2">
+                <section className="admin-card">
+                  <div className="admin-card-head">
+                    <div>
+                      <h2>Добавить товар</h2>
+                      <p>Новые товары вручную, из 1С или импортом из Excel</p>
+                    </div>
                   </div>
 
-                  {editingProductId && (
-                    <button type="button" className="btn btn-light" onClick={cancelEditProduct}>Отмена</button>
-                  )}
-                </div>
-
-                <form className="admin-form" onSubmit={editingProductId ? (e) => { e.preventDefault(); saveEditProduct(editingProductId); } : addProduct}>
-                  {renderProductForm({ mode: editingProductId ? 'edit' : 'create' })}
-
-                  <label className="admin-upload-field">
-                    <span>{editingProductId ? 'Загрузить новое фото' : 'Загрузить фото товара'}</span>
-                    <input type="file" accept="image/*" onChange={editingProductId ? uploadEditProductPhoto : uploadProductPhoto} />
+                  <label className="admin-excel-import">
+                    <span>Загрузить товары из Excel / CSV / ODS</span>
+                    <small>Поддержка: .xlsx, .xls, .csv, .ods, .tsv, .txt</small>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv,.ods,.tsv,.txt"
+                      onChange={importProductsFromExcel}
+                    />
                   </label>
 
-                  {productUploadText && !editingProductId && <div className="admin-note">{productUploadText}</div>}
+                  <form className="admin-form" onSubmit={createProduct}>
+                    <input name="external_id" value={productForm.external_id} onChange={handleProductChange} placeholder="ID из 1С" />
+                    <input name="article" value={productForm.article} onChange={handleProductChange} placeholder="Артикул" />
+                    <input name="name" value={productForm.name} onChange={handleProductChange} placeholder="Название товара" required />
 
-                  {(editingProductId ? editForm.image_url : form.image_url) && (
-                    <>
-                      <div className="admin-preview-row">
-                        <img src={editingProductId ? editForm.image_url : form.image_url} alt="preview" />
-                      </div>
+                    <select name="category" value={productForm.category} onChange={handleProductChange} required>
+                      <option value="">Категория</option>
+                      {CATEGORIES.map((category) => (
+                        <option key={category.value} value={category.value}>{category.label}</option>
+                      ))}
+                    </select>
 
-                      <div className="admin-preview-title">Предварительный просмотр товара</div>
+                    <input name="price" type="number" value={productForm.price} onChange={handleProductChange} placeholder="Цена" required />
+                    <input name="stock" type="number" value={productForm.stock} onChange={handleProductChange} placeholder="Остаток" />
+                    <input name="sizes" value={productForm.sizes} onChange={handleProductChange} placeholder="Размеры: S, M, L" />
 
+                    <label className="admin-upload-field">
+                      <span>Загрузить фото товара</span>
+                      <input type="file" accept="image/*" onChange={(event) => uploadProductImage(event, 'new')} />
+                    </label>
+
+                    <input name="image_url" value={productForm.image_url} onChange={handleProductChange} placeholder="Ссылка на фото" />
+                    <textarea name="description" value={productForm.description} onChange={handleProductChange} placeholder="Описание" />
+
+                    {productForm.image_url && (
                       <article className="admin-product-preview-card">
                         <div className="admin-product-preview-image">
-                          <img src={editingProductId ? editForm.image_url : form.image_url} alt={editingProductId ? editForm.name : form.name} />
+                          <img src={productForm.image_url} alt={productForm.name} />
                         </div>
-
                         <div className="admin-product-preview-body">
-                          <span>{getCategoryLabel(editingProductId ? editForm.category : form.category)}</span>
-                          <strong>{editingProductId ? editForm.name || 'Название товара' : form.name || 'Название товара'}</strong>
-                          <p>{editingProductId ? editForm.sizes || 'Размеры уточняйте' : form.sizes || 'Размеры уточняйте'}</p>
-
+                          <span>{getCategoryLabel(productForm.category)}</span>
+                          <strong>{productForm.name || 'Название товара'}</strong>
+                          <p>{productForm.sizes || 'Размеры уточняйте'}</p>
                           <div className="admin-product-preview-bottom">
-                            <b>{formatPrice(editingProductId ? editForm.price : form.price)}</b>
+                            <b>{formatPrice(productForm.price)}</b>
                             <button type="button">В корзину</button>
                           </div>
                         </div>
                       </article>
-                    </>
-                  )}
+                    )}
 
-                  <button type="submit" className="btn btn-dark full-width">
-                    {editingProductId ? 'Сохранить товар' : 'Добавить товар'}
-                  </button>
-                </form>
-              </section>
+                    <button type="submit" className="btn btn-dark full-width">Добавить товар</button>
+                  </form>
+                </section>
 
-              <section className="admin-card admin-card-wide">
-                <div className="admin-card-head">
-                  <div>
-                    <h2>Управление товарами</h2>
-                    <p>Публикация, редактирование, удаление и товары из 1С</p>
+                <section className="admin-card">
+                  <div className="admin-card-head">
+                    <div>
+                      <h2>Управление товарами</h2>
+                      <p>Публикация, редактирование, удаление и товары из 1С</p>
+                    </div>
+                    <input className="admin-search" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Поиск товара" />
                   </div>
 
-                  <input className="admin-search" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Поиск товара" />
-                </div>
-
-                {filteredProducts.length === 0 ? (
-                  <div className="admin-empty">Товаров пока нет</div>
-                ) : (
                   <div className="admin-table-wrap">
                     <table className="admin-table">
                       <thead>
@@ -937,25 +1087,25 @@ export default function AdminDashboard() {
                             <td>
                               <div className="admin-product-cell">
                                 <div className="admin-product-thumb">
-                                  {product.image_url ? <img src={product.image_url} alt={product.name} /> : <span>Нет фото</span>}
+                                  {product.image_url ? <img src={product.image_url} alt={product.name} /> : 'Нет фото'}
                                 </div>
                                 <div>
                                   <strong>{product.name}</strong>
-                                  <span>Артикул: {product.article || '—'} · ID 1С: {product.external_id || '—'}</span>
+                                  <span>Артикул: {product.article || '—'} · ID 1C: {product.external_id || '—'}</span>
                                 </div>
                               </div>
                             </td>
                             <td>{getCategoryLabel(product.category)}</td>
                             <td>{formatPrice(product.price)}</td>
-                            <td>{product.stock || 0}</td>
+                            <td>{product.stock}</td>
                             <td>
-                              <span className={product.is_published ? 'admin-badge success' : 'admin-badge warning'}>
-                                {product.is_published ? 'Опубликован' : 'Черновик'}
+                              <span className={`admin-badge ${Number(product.is_published) === 1 ? 'success' : 'warning'}`}>
+                                {Number(product.is_published) === 1 ? 'Опубликован' : 'Черновик'}
                               </span>
                             </td>
                             <td>
                               <div className="admin-row-actions">
-                                {product.is_published ? (
+                                {Number(product.is_published) === 1 ? (
                                   <button type="button" onClick={() => unpublishProduct(product.id)}>Снять</button>
                                 ) : (
                                   <button type="button" onClick={() => publishProduct(product.id)}>Опубликовать</button>
@@ -968,377 +1118,715 @@ export default function AdminDashboard() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
-                )}
-              </section>
-            </div>
-          )}
 
-          {activeTab === 'orders' && (
-            <section className="admin-card">
-              <div className="admin-card-head">
-                <div>
-                  <h2>Заказы</h2>
-                  <p>Смена статусов и контроль выгрузки в 1С</p>
+                    {filteredProducts.length === 0 && <div className="admin-empty">Товаров пока нет</div>}
+                  </div>
+
+                  {editProductId && (
+                    <form className="admin-product-edit" onSubmit={saveProductEdit}>
+                      <div>
+                        <h3>Редактировать товар</h3>
+                        <div className="admin-product-edit-grid">
+                          <input name="external_id" value={editProductForm.external_id} onChange={(event) => handleProductChange(event, 'edit')} placeholder="ID из 1С" />
+                          <input name="article" value={editProductForm.article} onChange={(event) => handleProductChange(event, 'edit')} placeholder="Артикул" />
+                          <input name="name" value={editProductForm.name} onChange={(event) => handleProductChange(event, 'edit')} placeholder="Название" required />
+                          <select name="category" value={editProductForm.category} onChange={(event) => handleProductChange(event, 'edit')} required>
+                            <option value="">Категория</option>
+                            {CATEGORIES.map((category) => (
+                              <option key={category.value} value={category.value}>{category.label}</option>
+                            ))}
+                          </select>
+                          <input name="price" type="number" value={editProductForm.price} onChange={(event) => handleProductChange(event, 'edit')} placeholder="Цена" required />
+                          <input name="stock" type="number" value={editProductForm.stock} onChange={(event) => handleProductChange(event, 'edit')} placeholder="Остаток" />
+                          <input name="sizes" value={editProductForm.sizes} onChange={(event) => handleProductChange(event, 'edit')} placeholder="Размеры" />
+                          <input name="image_url" value={editProductForm.image_url} onChange={(event) => handleProductChange(event, 'edit')} placeholder="Фото" />
+                        </div>
+
+                        <label className="admin-upload-field">
+                          <span>Заменить фото</span>
+                          <input type="file" accept="image/*" onChange={(event) => uploadProductImage(event, 'edit')} />
+                        </label>
+
+                        <textarea name="description" value={editProductForm.description} onChange={(event) => handleProductChange(event, 'edit')} placeholder="Описание" />
+
+                        <div className="admin-edit-actions">
+                          <button type="button" className="btn btn-light" onClick={() => setEditProductId(null)}>Отмена</button>
+                          <button type="submit" className="btn btn-dark">Сохранить</button>
+                        </div>
+                      </div>
+
+                      <div className="admin-product-preview">
+                        {editProductForm.image_url ? <img src={editProductForm.image_url} alt={editProductForm.name} /> : 'Нет фото'}
+                      </div>
+                    </form>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {activeTab === 'orders' && (
+              <section className="admin-card">
+                <div className="admin-card-head">
+                  <div>
+                    <h2>Заказы</h2>
+                    <p>Смена статуса заказов покупателей</p>
+                  </div>
                 </div>
 
-                <input className="admin-search" value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} placeholder="Поиск заказа" />
-              </div>
-
-              {filteredOrders.length === 0 ? (
-                <div className="admin-empty">Заказов пока нет</div>
-              ) : (
                 <div className="admin-table-wrap">
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>Заказ</th>
+                        <th>ID</th>
                         <th>Клиент</th>
+                        <th>Контакты</th>
                         <th>Сумма</th>
-                        <th>Доставка</th>
                         <th>Статус</th>
+                        <th>Дата</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredOrders.map((order) => (
+                      {orders.map((order) => (
                         <tr key={order.id}>
-                          <td>
-                            <strong>#{order.id}</strong>
-                            <span className="admin-muted">{order.created_at}</span>
-                          </td>
-                          <td>
-                            <strong>{order.customer_name}</strong>
-                            <span className="admin-muted">{order.phone}</span>
-                            <span className="admin-muted">{order.email}</span>
-                          </td>
+                          <td>#{order.id}</td>
+                          <td>{order.customer_name}</td>
+                          <td>{order.phone}<br />{order.email}</td>
                           <td>{formatPrice(order.total_amount)}</td>
                           <td>
-                            {order.delivery_type === 'pickup' ? 'Самовывоз' : 'Доставка'}
-                            {order.address ? <span className="admin-muted">{order.address}</span> : null}
-                          </td>
-                          <td>
-                            <select value={order.status} onChange={(event) => changeOrderStatus(order.id, event.target.value)}>
+                            <select value={order.status} onChange={(event) => updateOrderStatus(order.id, event.target.value)}>
                               <option value="new">Новый</option>
-                              <option value="processing">В обработке</option>
-                              <option value="shipped">Отправлен</option>
-                              <option value="done">Завершён</option>
+                              <option value="processing">В работе</option>
+                              <option value="completed">Выполнен</option>
                               <option value="cancelled">Отменён</option>
-                              <option value="exported_to_1c">Выгружен в 1С</option>
                             </select>
-                            <span className="admin-muted">{getStatusLabel(order.status)}</span>
                           </td>
+                          <td>{order.created_at}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-            </section>
-          )}
 
-          {activeTab === 'slides' && (
-            <div className="admin-grid-2">
-              <section className="admin-card">
-                <div className="admin-card-head">
-                  <div>
-                    <h2>Добавить слайд</h2>
-                    <p>От {SLIDES_MIN} до {SLIDES_MAX} слайдов. Видео — до 1 минуты.</p>
+                  {orders.length === 0 && <div className="admin-empty">Заказов пока нет</div>}
+                </div>
+              </section>
+            )}
+
+            {activeTab === 'slides' && (
+              <div className="admin-grid-2">
+                <section className="admin-card">
+                  <div className="admin-card-head">
+                    <div>
+                      <h2>Добавить слайд</h2>
+                      <p>От 0 до 10 слайдов. Видео — до 1 минуты.</p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="admin-limit-box">Сейчас слайдов: <strong>{slides.length}</strong> / {SLIDES_MAX}</div>
+                  <form className="admin-form" onSubmit={createSlide}>
+                    <div className="admin-limit-box">Сейчас слайдов: {slides.length} / 10</div>
+                    <input value={slideForm.title} onChange={(event) => setSlideForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Заголовок" />
+                    <input value={slideForm.subtitle} onChange={(event) => setSlideForm((prev) => ({ ...prev, subtitle: event.target.value }))} placeholder="Подзаголовок" />
 
-                <form className="admin-form" onSubmit={addSlide}>
-                  <input value={slideForm.title} onChange={(event) => setSlideForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Заголовок" />
-                  <input value={slideForm.subtitle} onChange={(event) => setSlideForm((prev) => ({ ...prev, subtitle: event.target.value }))} placeholder="Подзаголовок" />
+                    <label className="admin-upload-field">
+                      <span>Загрузить фото или видео</span>
+                      <input type="file" accept="image/*,video/*" onChange={uploadSlideMedia} />
+                    </label>
 
-                  <label className="admin-upload-field">
-                    <span>Загрузить фото или видео</span>
-                    <input type="file" accept="image/*,video/mp4,video/webm" onChange={uploadSlideFile} disabled={slides.length >= SLIDES_MAX} />
-                  </label>
+                    <input value={slideForm.image_url} onChange={(event) => setSlideForm((prev) => ({ ...prev, image_url: event.target.value }))} placeholder="Ссылка появится после загрузки файла" />
+                    <select value={slideForm.media_type} onChange={(event) => setSlideForm((prev) => ({ ...prev, media_type: event.target.value }))}>
+                      <option value="image">Фото</option>
+                      <option value="video">Видео</option>
+                    </select>
+                    <input value={slideForm.background_color} onChange={(event) => setSlideForm((prev) => ({ ...prev, background_color: event.target.value }))} placeholder="#111111" />
+                    <input type="number" value={slideForm.sort_order} onChange={(event) => setSlideForm((prev) => ({ ...prev, sort_order: Number(event.target.value) }))} placeholder="Порядок" />
 
-                  {slideUploadText && <div className="admin-note">{slideUploadText}</div>}
-
-                  {slideForm.image_url && (
-                    <>
-                      <div className="admin-preview-row">
-                        {slideForm.media_type === 'video' ? <video src={slideForm.image_url} controls /> : <img src={slideForm.image_url} alt="preview" />}
-                      </div>
-
-                      <div className="admin-preview-title">Предварительный просмотр слайда</div>
-
-                      <div
-                        className="admin-slide-preview-card"
-                        style={{ backgroundColor: slideForm.background_color || '#111111' }}
-                      >
+                    {slideForm.image_url && (
+                      <div className="admin-slide-preview-card" style={{ backgroundColor: slideForm.background_color }}>
                         {slideForm.media_type === 'video' ? (
                           <video src={slideForm.image_url} controls />
                         ) : (
                           <img src={slideForm.image_url} alt={slideForm.title || 'Слайд'} />
                         )}
-
-                        <div className="admin-slide-preview-overlay">
-                          <strong>{slideForm.title || 'Заголовок слайда'}</strong>
-                          <span>{slideForm.subtitle || 'Подзаголовок слайда'}</span>
-                        </div>
                       </div>
-                    </>
-                  )}
+                    )}
 
-                  <input value={slideForm.image_url} onChange={(event) => setSlideForm((prev) => ({ ...prev, image_url: event.target.value }))} placeholder="Ссылка на картинку или видео" required />
+                    <button type="submit" className="btn btn-dark full-width">Добавить слайд</button>
+                  </form>
+                </section>
 
-                  <select value={slideForm.media_type} onChange={(event) => setSlideForm((prev) => ({ ...prev, media_type: event.target.value }))}>
-                    <option value="image">Фото</option>
-                    <option value="video">Видео</option>
-                  </select>
-
-                  <input value={slideForm.background_color} onChange={(event) => setSlideForm((prev) => ({ ...prev, background_color: event.target.value }))} placeholder="#111111" />
-                  <input type="number" value={slideForm.sort_order} onChange={(event) => setSlideForm((prev) => ({ ...prev, sort_order: event.target.value }))} placeholder="Порядок" />
-
-                  <button className="btn btn-dark full-width" type="submit" disabled={slides.length >= SLIDES_MAX}>Добавить слайд</button>
-                </form>
-              </section>
-
-              <section className="admin-card">
-                <div className="admin-card-head">
-                  <div>
-                    <h2>Список слайдов</h2>
-                    <p>Управление главным баннером</p>
+                <section className="admin-card">
+                  <div className="admin-card-head">
+                    <div>
+                      <h2>Список слайдов</h2>
+                      <p>Управление главным баннером</p>
+                    </div>
                   </div>
-                </div>
 
-                {slides.length === 0 ? (
-                  <div className="admin-empty">Слайдов пока нет</div>
-                ) : (
                   <div className="admin-slide-list">
                     {slides.map((slide) => (
-                      <div className="admin-slide-item" key={slide.id}>
+                      <div key={slide.id} className="admin-slide-item">
                         <div className="admin-slide-media">
                           {slide.media_type === 'video' ? <video src={slide.image_url} /> : <img src={slide.image_url} alt={slide.title || 'Слайд'} />}
                         </div>
                         <div>
-                          <strong>{slide.title || 'Слайд'}</strong>
-                          <span>{slide.subtitle || 'Без подзаголовка'}</span>
-                          <span>Тип: {slide.media_type || 'image'} · Порядок: {slide.sort_order}</span>
+                          <strong>{slide.title || 'Без заголовка'}</strong>
+                          <span>{slide.image_url}</span>
                         </div>
-                        <button type="button" className="admin-icon-btn danger" onClick={() => deleteSlide(slide.id)} disabled={slides.length <= SLIDES_MIN}>Удалить</button>
+                        <button type="button" className="admin-icon-btn danger" onClick={() => deleteSlide(slide.id)}>Удалить</button>
                       </div>
                     ))}
+
+                    {slides.length === 0 && <div className="admin-empty">Слайдов пока нет</div>}
                   </div>
-                )}
-              </section>
-            </div>
-          )}
-
-          {activeTab === 'settings' && (
-            <section className="admin-card admin-settings-card">
-              <div className="admin-card-head">
-                <div>
-                  <h2>Настройки сайта</h2>
-                  <p>Логотип, тексты главной страницы, контакты, footer и цвета сайта</p>
-                </div>
+                </section>
               </div>
+            )}
 
-              <form className="admin-settings-form" onSubmit={saveSettings}>
-                <div className="admin-settings-grid">
-                  <label>
-                    <span>Название сайта</span>
-                    <input name="site_title" value={siteSettings.site_title} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Логотип</span>
-                    <input name="logo_url" value={siteSettings.logo_url} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Белый логотип</span>
-                    <input name="logo_white_url" value={siteSettings.logo_white_url} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Надпись над заголовком</span>
-                    <input name="hero_badge" value={siteSettings.hero_badge} onChange={handleSettingChange} />
-                  </label>
-
-                  <label className="wide">
-                    <span>Главный заголовок</span>
-                    <textarea name="hero_title" value={siteSettings.hero_title} onChange={handleSettingChange} />
-                  </label>
-
-                  <label className="wide">
-                    <span>Описание на главной</span>
-                    <textarea name="hero_text" value={siteSettings.hero_text} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Кнопка 1</span>
-                    <input name="hero_button_primary" value={siteSettings.hero_button_primary} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Кнопка 2</span>
-                    <input name="hero_button_secondary" value={siteSettings.hero_button_secondary} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Телефон</span>
-                    <input name="phone" value={siteSettings.phone} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Email</span>
-                    <input name="email" value={siteSettings.email} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Адрес</span>
-                    <input name="address" value={siteSettings.address} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Telegram</span>
-                    <input name="telegram_url" value={siteSettings.telegram_url} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>WhatsApp</span>
-                    <input name="whatsapp_url" value={siteSettings.whatsapp_url} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Instagram</span>
-                    <input name="instagram_url" value={siteSettings.instagram_url} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Основной цвет</span>
-                    <input name="accent_color" value={siteSettings.accent_color} onChange={handleSettingChange} />
-                  </label>
-
-                  <label>
-                    <span>Фон сайта</span>
-                    <input name="background_color" value={siteSettings.background_color} onChange={handleSettingChange} />
-                  </label>
-
-                  <label className="wide">
-                    <span>Текст footer</span>
-                    <input name="footer_text" value={siteSettings.footer_text} onChange={handleSettingChange} />
-                  </label>
-                </div>
-
-                <div className="admin-logo-upload-row">
-                  <label className="admin-upload-field">
-                    <span>Загрузить обычный логотип</span>
-                    <input type="file" accept="image/*" onChange={(event) => uploadSiteLogo(event, 'logo_url')} />
-                  </label>
-
-                  <label className="admin-upload-field">
-                    <span>Загрузить белый логотип</span>
-                    <input type="file" accept="image/*" onChange={(event) => uploadSiteLogo(event, 'logo_white_url')} />
-                  </label>
-                </div>
-
-                {settingsUploadText && <div className="admin-note">{settingsUploadText}</div>}
-
-                <div className="admin-settings-preview">
-                  <div style={{ backgroundColor: siteSettings.background_color }}>
-                    <img src={siteSettings.logo_url} alt="logo" />
-                    <span style={{ backgroundColor: siteSettings.accent_color }}>{siteSettings.hero_badge}</span>
-                    <h3>{siteSettings.hero_title}</h3>
-                    <p>{siteSettings.hero_text}</p>
-                    <b>{siteSettings.footer_text}</b>
+            {activeTab === 'clients' && (
+              <section className="admin-card">
+                <div className="admin-card-head">
+                  <div>
+                    <h2>Клиенты</h2>
+                    <p>Зарегистрированные пользователи сайта</p>
                   </div>
                 </div>
 
-                <button type="submit" className="btn btn-dark full-width">Сохранить настройки</button>
-              </form>
-            </section>
-          )}
-
-          {activeTab === 'preview' && (
-            <section className="admin-card admin-site-preview-card">
-              <div className="admin-card-head">
-                <div>
-                  <h2>Предварительный просмотр сайта</h2>
-                  <p>Так будет выглядеть сайт для покупателей. После изменений нажмите “Обновить”.</p>
-                </div>
-
-                <div className="admin-preview-actions">
-                  <button
-                    type="button"
-                    className={previewMode === 'desktop' ? 'active' : ''}
-                    onClick={() => setPreviewMode('desktop')}
-                  >
-                    Desktop
-                  </button>
-                  <button
-                    type="button"
-                    className={previewMode === 'tablet' ? 'active' : ''}
-                    onClick={() => setPreviewMode('tablet')}
-                  >
-                    Tablet
-                  </button>
-                  <button
-                    type="button"
-                    className={previewMode === 'mobile' ? 'active' : ''}
-                    onClick={() => setPreviewMode('mobile')}
-                  >
-                    Mobile
-                  </button>
-                  <a href="/" target="_blank" rel="noreferrer">Открыть сайт</a>
-                </div>
-              </div>
-
-              <div className={`admin-site-preview-shell ${previewMode}`}>
-                <iframe
-                  title="Предпросмотр сайта TETIM"
-                  src="/"
-                  className="admin-site-preview-frame"
-                />
-              </div>
-            </section>
-          )}
-
-          {activeTab === 'clients' && (
-            <section className="admin-card">
-              <div className="admin-card-head">
-                <div>
-                  <h2>Клиенты</h2>
-                  <p>Пользователи сайта и их роли</p>
-                </div>
-              </div>
-
-              {users.length === 0 ? (
-                <div className="admin-empty">Клиентов пока нет</div>
-              ) : (
                 <div className="admin-table-wrap">
                   <table className="admin-table">
                     <thead>
                       <tr>
+                        <th>ID</th>
                         <th>Имя</th>
                         <th>Email</th>
                         <th>Телефон</th>
                         <th>Роль</th>
+                        <th>Дата</th>
                       </tr>
                     </thead>
                     <tbody>
                       {users.map((item) => (
                         <tr key={item.id}>
-                          <td><strong>{item.name}</strong></td>
+                          <td>{item.id}</td>
+                          <td>{item.name}</td>
                           <td>{item.email}</td>
-                          <td>{item.phone || '—'}</td>
-                          <td><span className="admin-badge">{item.role}</span></td>
+                          <td>{item.phone}</td>
+                          <td>{item.role}</td>
+                          <td>{item.created_at}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+
+                  {users.length === 0 && <div className="admin-empty">Клиентов пока нет</div>}
                 </div>
-              )}
-            </section>
-          )}
-        </section>
-      </div>
+              </section>
+            )}
+
+            {activeTab === 'preview' && (
+              <section className="admin-card admin-site-preview-card">
+                <div className="admin-card-head">
+                  <div>
+                    <h2>Предварительный просмотр сайта</h2>
+                    <p>Так будет выглядеть сайт для покупателей</p>
+                  </div>
+
+                  <div className="admin-preview-actions">
+                    <button type="button" className={previewMode === 'desktop' ? 'active' : ''} onClick={() => setPreviewMode('desktop')}>Desktop</button>
+                    <button type="button" className={previewMode === 'tablet' ? 'active' : ''} onClick={() => setPreviewMode('tablet')}>Tablet</button>
+                    <button type="button" className={previewMode === 'mobile' ? 'active' : ''} onClick={() => setPreviewMode('mobile')}>Mobile</button>
+                    <a href="/" target="_blank" rel="noreferrer">Открыть сайт</a>
+                  </div>
+                </div>
+
+                <div className={`admin-site-preview-shell ${previewMode}`}>
+                  <iframe title="Предпросмотр сайта TETIM" src="/" className="admin-site-preview-frame" />
+                </div>
+              </section>
+            )}
+
+            {activeTab === 'appearance' && (
+              <section className="builder-theme-card appearance-page-card">
+                <div className="builder-theme-head">
+                  <div>
+                    <h2>Оформление сайта</h2>
+                    <p>Отдельный раздел для темы сайта, орнамента, фона и праздничного декора</p>
+                  </div>
+
+                  <button type="button" onClick={saveThemeSettings}>
+                    Сохранить оформление
+                  </button>
+                </div>
+
+                <div className="builder-theme-grid">
+                  <label>
+                    <span>Тема сайта</span>
+                    <select
+                      value={themeForm.site_theme}
+                      onChange={(event) =>
+                        setThemeForm((prev) => ({
+                          ...prev,
+                          site_theme: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="auto">Автоматически по праздникам</option>
+                      <option value="default">Обычная</option>
+                      <option value="sakha">Саха</option>
+                      <option value="newyear">Новогодняя</option>
+                      <option value="defender">23 февраля</option>
+                      <option value="womens">8 марта</option>
+                      <option value="sakha-republic">День Республики Саха</option>
+                      <option value="ysyakh">Ысыах</option>
+                      <option value="sakha-statehood">День государственности</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Автотемы по праздникам</span>
+                    <select
+                      value={themeForm.holiday_theme_enabled}
+                      onChange={(event) =>
+                        setThemeForm((prev) => ({
+                          ...prev,
+                          holiday_theme_enabled: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="1">Включены</option>
+                      <option value="0">Выключены</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    <span>Снег</span>
+                    <select
+                      value={themeForm.snow_enabled}
+                      onChange={(event) =>
+                        setThemeForm((prev) => ({
+                          ...prev,
+                          snow_enabled: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="0">Выключен</option>
+                      <option value="1">Включен</option>
+                    </select>
+                  </label>
+
+                  <label className="wide">
+                    <span>Орнамент header</span>
+                    <input
+                      value={themeForm.header_ornament_url}
+                      onChange={(event) =>
+                        setThemeForm((prev) => ({
+                          ...prev,
+                          header_ornament_url: event.target.value,
+                        }))
+                      }
+                      placeholder="/assets/sakha-ornament.png"
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => uploadThemeImage(event, 'header_ornament_url')}
+                    />
+                  </label>
+
+                  <label className="wide">
+                    <span>Фоновый рисунок сайта</span>
+                    <input
+                      value={themeForm.background_pattern_url}
+                      onChange={(event) =>
+                        setThemeForm((prev) => ({
+                          ...prev,
+                          background_pattern_url: event.target.value,
+                        }))
+                      }
+                      placeholder="Ссылка на фон"
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => uploadThemeImage(event, 'background_pattern_url')}
+                    />
+                  </label>
+
+                  <label className="wide">
+                    <span>Декоративный рисунок</span>
+                    <input
+                      value={themeForm.decor_image_url}
+                      onChange={(event) =>
+                        setThemeForm((prev) => ({
+                          ...prev,
+                          decor_image_url: event.target.value,
+                        }))
+                      }
+                      placeholder="Например снежинка, узор, новогодний декор"
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => uploadThemeImage(event, 'decor_image_url')}
+                    />
+                  </label>
+                </div>
+
+                <div className={`builder-theme-preview theme-${themeForm.site_theme}`}>
+                  {themeForm.header_ornament_url && (
+                    <img src={themeForm.header_ornament_url} alt="" />
+                  )}
+
+                  <h2>
+                    {themeForm.site_theme === 'newyear'
+                      ? 'Новогодняя тема TETIM'
+                      : 'Тема сайта TETIM'}
+                  </h2>
+
+                  <p>Здесь администратор видит, как будет выглядеть оформление сайта.</p>
+                </div>
+              </section>
+            )}
+
+            {activeTab === 'builder' && (
+              <section className="builder-panel">
+                <div className="builder-top">
+                  <div>
+                    <h2>Конструктор сайта</h2>
+                    <p>Собирайте главную страницу из блоков: как в Tilda</p>
+                  </div>
+
+                  <div className="builder-add-actions">
+                    <button
+                      type="button"
+                      className="builder-preview-open-btn"
+                      onClick={() => setBuilderPreviewOpen(true)}
+                    >
+                      Предпросмотр сайта
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        createEmptyBlock('hero');
+                        showMessage('Блок “Главный экран” готов к добавлению');
+                      }}
+                    >
+                      + Главный экран
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        createEmptyBlock('slider');
+                        showMessage('Блок “Слайдер” готов к добавлению');
+                      }}
+                    >
+                      + Слайдер
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        createEmptyBlock('categories');
+                        showMessage('Блок “Категории” готов к добавлению');
+                      }}
+                    >
+                      + Категории
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        createEmptyBlock('products');
+                        showMessage('Блок “Товары” готов к добавлению');
+                      }}
+                    >
+                      + Товары
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        createEmptyBlock('text_image');
+                        showMessage('Блок “Текст + фото” готов к добавлению');
+                      }}
+                    >
+                      + Текст + фото
+                    </button>
+                  </div>
+                </div>
+
+                <div className="builder-layout">
+                  <aside className="builder-blocks">
+                    <div className="builder-blocks-head">
+                      <strong>Блоки страницы</strong>
+                      <span>{pageBlocks.length}</span>
+                    </div>
+
+                    {pageBlocks.length === 0 ? (
+                      <div className="admin-empty">Блоков пока нет</div>
+                    ) : (
+                      pageBlocks.map((block) => (
+                        <button
+                          key={block.id}
+                          type="button"
+                          className={`builder-block-card ${selectedBlockId === block.id ? 'active' : ''}`}
+                          onClick={() => selectBlock(block)}
+                        >
+                          <span>{getBlockTypeLabel(block.type)}</span>
+                          <strong>{block.title || 'Без названия'}</strong>
+                          <small>#{block.sort_order} · {Number(block.is_active) === 1 ? 'Включён' : 'Скрыт'}</small>
+                        </button>
+                      ))
+                    )}
+                  </aside>
+
+                  <form ref={builderEditorRef} className="builder-editor" onSubmit={savePageBlock}>
+                    <div className="builder-editor-head">
+                      <div>
+                        <h3>{selectedBlockId ? 'Редактировать блок' : 'Новый блок'}</h3>
+                        <p>Изменения сохраняются в базу и потом выводятся на главной странице.</p>
+                      </div>
+
+                      {selectedBlockId && (
+                        <button type="button" className="builder-delete-btn" onClick={() => deletePageBlock(selectedBlockId)}>Удалить</button>
+                      )}
+                    </div>
+
+                    <div className="builder-form-grid">
+                      <label>
+                        <span>Тип блока</span>
+                        <select value={blockForm.type} onChange={(event) => handleBlockTypeChange(event.target.value)}>
+                          {BLOCK_TYPES.map((type) => (
+                            <option key={type.value} value={type.value}>{type.label}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label>
+                        <span>Порядок</span>
+                        <input type="number" value={blockForm.sort_order} onChange={(event) => setBlockForm((prev) => ({ ...prev, sort_order: Number(event.target.value) }))} />
+                      </label>
+
+                      <label className="wide">
+                        <span>Заголовок</span>
+                        <input value={blockForm.title} onChange={(event) => setBlockForm((prev) => ({ ...prev, title: event.target.value }))} />
+                      </label>
+
+                      <label className="wide">
+                        <span>Подзаголовок / текст</span>
+                        <textarea value={blockForm.subtitle} onChange={(event) => setBlockForm((prev) => ({ ...prev, subtitle: event.target.value }))} />
+                      </label>
+
+                      <label className="builder-color-field">
+                        <span>Фон</span>
+
+                        <div className="builder-color-row">
+                          <input
+                            type="color"
+                            value={blockForm.background_color || '#ffffff'}
+                            onChange={(event) =>
+                              setBlockForm((prev) => ({
+                                ...prev,
+                                background_color: event.target.value,
+                              }))
+                            }
+                            aria-label="Выбрать цвет фона"
+                          />
+
+                          <input
+                            value={blockForm.background_color}
+                            onChange={(event) =>
+                              setBlockForm((prev) => ({
+                                ...prev,
+                                background_color: event.target.value,
+                              }))
+                            }
+                            placeholder="#ffffff"
+                          />
+
+                          <b
+                            className="builder-color-sample"
+                            style={{ backgroundColor: blockForm.background_color || '#ffffff' }}
+                            title={blockForm.background_color || '#ffffff'}
+                          />
+                        </div>
+                      </label>
+
+                      <label className="builder-color-field">
+                        <span>Цвет текста</span>
+
+                        <div className="builder-color-row">
+                          <input
+                            type="color"
+                            value={blockForm.text_color || '#111111'}
+                            onChange={(event) =>
+                              setBlockForm((prev) => ({
+                                ...prev,
+                                text_color: event.target.value,
+                              }))
+                            }
+                            aria-label="Выбрать цвет текста"
+                          />
+
+                          <input
+                            value={blockForm.text_color}
+                            onChange={(event) =>
+                              setBlockForm((prev) => ({
+                                ...prev,
+                                text_color: event.target.value,
+                              }))
+                            }
+                            placeholder="#111111"
+                          />
+
+                          <b
+                            className="builder-color-sample"
+                            style={{ backgroundColor: blockForm.text_color || '#111111' }}
+                            title={blockForm.text_color || '#111111'}
+                          />
+                        </div>
+                      </label>
+
+                      <label className="wide">
+                        <span>Картинка / видео</span>
+                        <input value={blockForm.image_url} onChange={(event) => setBlockForm((prev) => ({ ...prev, image_url: event.target.value }))} placeholder="URL изображения" />
+                      </label>
+
+                      <label className="wide admin-upload-field">
+                        <span>Загрузить изображение блока</span>
+                        <input type="file" accept="image/*,video/*" onChange={uploadBlockImage} />
+                      </label>
+
+                      {blockForm.type === 'slider' && (
+                        <div className="builder-slides-inside wide">
+                          <div className="builder-slides-head">
+                            <div>
+                              <strong>Слайды в конструкторе</strong>
+                              <span>{slides.length} / 10</span>
+                            </div>
+
+                            <button type="button" onClick={() => setActiveTab('slides')}>
+                              Добавить или удалить слайд
+                            </button>
+                          </div>
+
+                          <div className="builder-slides-list">
+                            {slides.length === 0 ? (
+                              <div className="admin-empty">Слайдов пока нет</div>
+                            ) : (
+                              slides.map((slide) => (
+                                <div key={slide.id} className="builder-slide-mini">
+                                  <div>
+                                    {slide.media_type === 'video' ? (
+                                      <video src={slide.image_url} muted />
+                                    ) : (
+                                      <img src={slide.image_url} alt={slide.title || 'Слайд'} />
+                                    )}
+                                  </div>
+                                  <strong>{slide.title || 'Без заголовка'}</strong>
+                                  <small>Порядок: {slide.sort_order}</small>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <label className="wide">
+                        <span>JSON настройки блока</span>
+                        <textarea className="builder-json" value={blockForm.content_json} onChange={(event) => setBlockForm((prev) => ({ ...prev, content_json: event.target.value }))} />
+                      </label>
+
+                      <label className="builder-check">
+                        <input type="checkbox" checked={blockForm.is_active} onChange={(event) => setBlockForm((prev) => ({ ...prev, is_active: event.target.checked }))} />
+                        <span>Показывать блок на сайте</span>
+                      </label>
+                    </div>
+
+                    <div className="builder-preview">
+                      <div className="builder-preview-block" style={{ backgroundColor: blockForm.background_color, color: blockForm.text_color }}>
+                        {blockForm.type === 'slider' ? (
+                          <div className="builder-slider-preview">
+                            <span>{getBlockTypeLabel(blockForm.type)}</span>
+                            <h2>{blockForm.title || 'Слайдер главного экрана'}</h2>
+                            <p>{blockForm.subtitle || 'Слайды берутся из раздела “Слайды”'}</p>
+
+                            <div className="builder-slider-preview-grid">
+                              {slides.slice(0, 4).map((slide) => (
+                                <div key={slide.id} className="builder-slider-preview-item">
+                                  {slide.media_type === 'video' ? (
+                                    <video src={slide.image_url} muted />
+                                  ) : (
+                                    <img src={slide.image_url} alt={slide.title || 'Слайд'} />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {slides.length === 0 && <div className="admin-empty">Слайдов пока нет</div>}
+                          </div>
+                        ) : (
+                          <>
+                            {blockForm.image_url && <img src={blockForm.image_url} alt="" />}
+                            <span>{getBlockTypeLabel(blockForm.type)}</span>
+                            <h2>{blockForm.title || 'Заголовок блока'}</h2>
+                            <p>{blockForm.subtitle || 'Описание блока'}</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="builder-editor-actions">
+                      {selectedBlockId && (
+                        <>
+                          <button type="button" onClick={() => moveBlock(pageBlocks.find((item) => item.id === selectedBlockId), -1)}>Выше</button>
+                          <button type="button" onClick={() => moveBlock(pageBlocks.find((item) => item.id === selectedBlockId), 1)}>Ниже</button>
+                        </>
+                      )}
+
+                      <button type="submit" className="builder-save-btn">
+                        {selectedBlockId ? 'Сохранить блок' : 'Добавить блок'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </section>
+            )}
+          </section>
+        </div>
+
+        {message && <div className={`admin-toast admin-toast-${message.type}`}>{message.text}</div>}
+
+        {builderPreviewOpen && (
+          <div className="admin-modal-backdrop" onClick={() => setBuilderPreviewOpen(false)}>
+            <div className="builder-site-preview-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="builder-site-preview-head">
+                <div>
+                  <h3>Предпросмотр сайта</h3>
+                  <p>Открыто из конструктора сайта</p>
+                </div>
+
+                <button type="button" onClick={() => setBuilderPreviewOpen(false)}>×</button>
+              </div>
+
+              <iframe title="Предпросмотр сайта из конструктора" src="/" />
+            </div>
+          </div>
+        )}
+
+        {confirmModal && (
+          <div className="admin-modal-backdrop" onClick={() => setConfirmModal(null)}>
+            <div className="admin-confirm-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="admin-confirm-icon">!</div>
+              <h3>{confirmModal.title}</h3>
+              <p>{confirmModal.text}</p>
+              <div className="admin-confirm-actions">
+                <button type="button" className="admin-confirm-cancel" onClick={() => setConfirmModal(null)}>{confirmModal.cancelText || 'Отмена'}</button>
+                <button type="button" className={confirmModal.danger ? 'admin-confirm-danger' : 'admin-confirm-ok'} onClick={confirmModal.onConfirm}>{confirmModal.confirmText || 'Подтвердить'}</button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <Footer />

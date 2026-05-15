@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const XLSX = require('xlsx');
 
 const app = express();
 
@@ -387,10 +388,36 @@ async function seedSiteSettings() {
     logo_url: '/assets/logo-full.png',
     logo_white_url: '/assets/logo-full-white.png',
 
+    site_theme: 'auto',
+    holiday_theme_enabled: '1',
+
+    header_ornament_url: '/assets/sakha-ornament.png',
+    background_pattern_url: '',
+    decor_image_url: '',
+    snow_enabled: '0',
+
+    newyear_theme_start: '2026-01-01',
+    newyear_theme_end: '2026-01-08',
+
+    defender_theme_start: '2026-02-23',
+    defender_theme_end: '2026-02-23',
+
+    womens_theme_start: '2026-03-08',
+    womens_theme_end: '2026-03-08',
+
+    republic_theme_start: '2026-04-27',
+    republic_theme_end: '2026-04-27',
+
+    ysyakh_theme_start: '2026-06-21',
+    ysyakh_theme_end: '2026-06-21',
+
+    statehood_theme_start: '2026-09-27',
+    statehood_theme_end: '2026-09-27',
+
     hero_badge: 'Новая коллекция',
-    hero_title: 'Функциональная одежда для города, спорта и outdoor',
+    hero_title: 'Одежда с характером Севера',
     hero_text:
-      'Структура сайта как у большого интернет-магазина: удобный каталог, отдельная корзина, подборки и категории.',
+      'Создаём одежду для города, спорта и активной жизни — с вниманием к деталям, комфорту и северному характеру.',
     hero_button_primary: 'Каталог',
     hero_button_secondary: 'Индивидуальный заказ',
 
@@ -1175,7 +1202,7 @@ app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) =>
 });
 
 app.post(
-  '/api/admin/upload',
+  '/api/admin/products/import',
   authMiddleware,
   adminMiddleware,
   upload.single('file'),
@@ -1187,21 +1214,156 @@ app.post(
         });
       }
 
-      const isVideo = req.file.mimetype.startsWith('video/');
-      const mediaType = isVideo ? 'video' : 'image';
-      const url = `${SERVER_URL}/uploads/${req.file.filename}`;
+      const filePath = req.file.path;
+
+      const workbook = XLSX.readFile(filePath, {
+        cellDates: false,
+        raw: false,
+      });
+
+      const sheetName = workbook.SheetNames[0];
+
+      if (!sheetName) {
+        return res.status(400).json({
+          message: 'В файле нет листов',
+        });
+      }
+
+      const sheet = workbook.Sheets[sheetName];
+
+      const rows = XLSX.utils.sheet_to_json(sheet, {
+        defval: '',
+      });
+
+      if (!rows.length) {
+        return res.status(400).json({
+          message: 'Файл пустой или таблица не найдена',
+        });
+      }
+
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      const errors = [];
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        const product = normalizeImportedProduct(row);
+
+        if (!product.name) {
+          skipped += 1;
+          errors.push(`Строка ${index + 2}: нет названия товара`);
+          continue;
+        }
+
+        if (!product.category) {
+          product.category = 'accessories';
+        }
+
+        let existing = null;
+
+        if (product.external_id) {
+          existing = await get(
+            `SELECT * FROM products WHERE external_id = ?`,
+            [product.external_id]
+          );
+        }
+
+        if (!existing && product.article) {
+          existing = await get(
+            `SELECT * FROM products WHERE article = ?`,
+            [product.article]
+          );
+        }
+
+        if (existing) {
+          await run(
+            `
+            UPDATE products
+            SET
+              external_id = ?,
+              article = ?,
+              name = ?,
+              category = ?,
+              price = ?,
+              sizes = ?,
+              stock = ?,
+              image_url = ?,
+              description = ?,
+              is_published = ?,
+              moderation_status = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            `,
+            [
+              product.external_id || existing.external_id || '',
+              product.article || existing.article || '',
+              product.name,
+              product.category,
+              product.price,
+              product.sizes,
+              product.stock,
+              product.image_url || existing.image_url || '',
+              product.description,
+              product.is_published,
+              product.moderation_status,
+              existing.id,
+            ]
+          );
+
+          updated += 1;
+        } else {
+          await run(
+            `
+            INSERT INTO products (
+              external_id,
+              article,
+              name,
+              category,
+              price,
+              sizes,
+              stock,
+              image_url,
+              description,
+              is_published,
+              moderation_status,
+              updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            `,
+            [
+              product.external_id,
+              product.article,
+              product.name,
+              product.category,
+              product.price,
+              product.sizes,
+              product.stock,
+              product.image_url,
+              product.description,
+              product.is_published,
+              product.moderation_status,
+            ]
+          );
+
+          created += 1;
+        }
+      }
 
       return res.json({
-        message: 'Файл загружен',
-        url,
-        media_type: mediaType,
-        filename: req.file.filename,
+        message: 'Импорт товаров завершён',
+        total: rows.length,
+        created,
+        updated,
+        skipped,
+        errors: errors.slice(0, 20),
       });
     } catch (error) {
-      console.error('Ошибка загрузки файла:', error);
+      console.error('Ошибка импорта товаров:', error);
 
       return res.status(500).json({
-        message: 'Ошибка загрузки файла',
+        message: 'Ошибка импорта товаров из Excel',
       });
     }
   }
@@ -1210,6 +1372,145 @@ app.post(
 /* =========================
    ADMIN PRODUCTS
 ========================= */
+
+function normalizeImportKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replaceAll('ё', 'е')
+    .replace(/\s+/g, '_');
+}
+
+function getImportValue(row, keys) {
+  const normalizedRow = {};
+
+  for (const [key, value] of Object.entries(row)) {
+    normalizedRow[normalizeImportKey(key)] = value;
+  }
+
+  for (const key of keys) {
+    const normalizedKey = normalizeImportKey(key);
+
+    if (
+      normalizedRow[normalizedKey] !== undefined &&
+      normalizedRow[normalizedKey] !== null &&
+      normalizedRow[normalizedKey] !== ''
+    ) {
+      return normalizedRow[normalizedKey];
+    }
+  }
+
+  return '';
+}
+
+function parseImportNumber(value) {
+  if (value === undefined || value === null || value === '') {
+    return 0;
+  }
+
+  const cleaned = String(value)
+    .replace(/\s/g, '')
+    .replace(',', '.')
+    .replace(/[^\d.-]/g, '');
+
+  const number = Number(cleaned);
+
+  return Number.isFinite(number) ? number : 0;
+}
+
+function parseImportBoolean(value) {
+  const text = String(value || '').trim().toLowerCase();
+
+  return ['1', 'true', 'yes', 'да', 'опубликован', 'published'].includes(text);
+}
+
+function normalizeImportedProduct(row) {
+  const externalId = getImportValue(row, [
+    'external_id',
+    'id',
+    'guid',
+    'код',
+    'код_1с',
+    'id_1с',
+    'ид',
+    'внешний_id',
+  ]);
+
+  const article = getImportValue(row, [
+    'article',
+    'артикул',
+    'sku',
+    'код_товара',
+  ]);
+
+  const name = getImportValue(row, [
+    'name',
+    'название',
+    'наименование',
+    'товар',
+    'product',
+  ]);
+
+  const category = getImportValue(row, [
+    'category',
+    'категория',
+    'раздел',
+    'тип',
+  ]);
+
+  const price = parseImportNumber(
+    getImportValue(row, ['price', 'цена', 'стоимость'])
+  );
+
+  const stock = parseImportNumber(
+    getImportValue(row, ['stock', 'остаток', 'количество', 'qty'])
+  );
+
+  const sizes = getImportValue(row, [
+    'sizes',
+    'размеры',
+    'размер',
+    'size',
+  ]);
+
+  const imageUrl = getImportValue(row, [
+    'image_url',
+    'image',
+    'фото',
+    'картинка',
+    'изображение',
+    'ссылка_на_фото',
+  ]);
+
+  const description = getImportValue(row, [
+    'description',
+    'описание',
+    'комментарий',
+  ]);
+
+  const isPublished = parseImportBoolean(
+    getImportValue(row, [
+      'is_published',
+      'published',
+      'опубликован',
+      'публикация',
+    ])
+  );
+
+  return {
+    external_id: String(externalId || '').trim(),
+    article: String(article || '').trim(),
+    name: String(name || '').trim(),
+    category: String(category || 'accessories').trim(),
+    price,
+    stock,
+    sizes: String(sizes || '').trim(),
+    image_url: String(imageUrl || '').trim(),
+    description: String(description || '').trim(),
+    is_published: isPublished ? 1 : 0,
+    moderation_status: isPublished ? 'approved' : 'draft',
+  };
+}
 
 app.get(
   '/api/admin/products',

@@ -56,6 +56,7 @@ export default function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const selectedCategory = searchParams.get('category') || 'all';
+  const urlSearch = searchParams.get('search') || '';
 
   const cartCount = cart.reduce(
     (sum, item) => sum + Number(item.quantity || 0),
@@ -66,6 +67,10 @@ export default function Catalog() {
     loadProducts();
     loadCart();
   }, []);
+
+  useEffect(() => {
+  setSearchText(urlSearch);
+}, [urlSearch]);
 
   async function loadProducts() {
     try {
@@ -171,39 +176,44 @@ export default function Catalog() {
     saveCart(nextCart);
   }
 
-  function changeCategory(category) {
-    if (category === 'all') {
-      setSearchParams({});
-      return;
-    }
+function changeCategory(category) {
+  const nextParams = {};
 
-    setSearchParams({ category });
+  if (category !== 'all') {
+    nextParams.category = category;
   }
 
-  const filteredProducts = useMemo(() => {
-    let result = products;
+  if (searchText.trim()) {
+    nextParams.search = searchText.trim();
+  }
 
-    if (selectedCategory !== 'all') {
-      result = result.filter((product) => {
-        return String(product.category || '') === String(selectedCategory);
-      });
-    }
+  setSearchParams(nextParams);
+}
+const filteredProducts = useMemo(() => {
+  let result = products;
 
-    if (searchText.trim()) {
-      const text = searchText.trim().toLowerCase();
+  if (selectedCategory !== 'all') {
+    result = result.filter((product) => {
+      return String(product.category || '') === String(selectedCategory);
+    });
+  }
 
-      result = result.filter((product) => {
-        return (
-          String(product.name || '').toLowerCase().includes(text) ||
-          String(product.category || '').toLowerCase().includes(text) ||
-          String(product.article || '').toLowerCase().includes(text) ||
-          String(product.description || '').toLowerCase().includes(text)
-        );
-      });
-    }
+  if (searchText.trim()) {
+    const text = searchText.trim().toLowerCase();
 
-    return result;
-  }, [products, selectedCategory, searchText]);
+    result = result.filter((product) => {
+      return (
+        String(product.name || '').toLowerCase().includes(text) ||
+        String(product.category || '').toLowerCase().includes(text) ||
+        String(product.article || '').toLowerCase().includes(text) ||
+        String(product.external_id || '').toLowerCase().includes(text) ||
+        String(product.description || '').toLowerCase().includes(text)
+      );
+    });
+  }
+
+  return result;
+}, [products, selectedCategory, searchText]);
 
   return (
     <>
@@ -218,11 +228,26 @@ export default function Catalog() {
         </div>
 
         <div className="catalog-search-row">
-          <input
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            placeholder="Поиск по товарам"
-          />
+<input
+  value={searchText}
+  onChange={(event) => {
+    const value = event.target.value;
+    setSearchText(value);
+
+    const nextParams = {};
+
+    if (selectedCategory !== 'all') {
+      nextParams.category = selectedCategory;
+    }
+
+    if (value.trim()) {
+      nextParams.search = value.trim();
+    }
+
+    setSearchParams(nextParams);
+  }}
+  placeholder="Поиск по товарам"
+/>
         </div>
 
         <div className="catalog-layout">
