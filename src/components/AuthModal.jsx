@@ -1,17 +1,22 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
-const API_URL = 'http://localhost:4000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
 
 export default function AuthModal({ isOpen, onClose, onLogin }) {
-  const navigate = useNavigate();
-
   const [mode, setMode] = useState('login');
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
 
   const [loginForm, setLoginForm] = useState({
-    email: '',
+    email: 'admin@tetim.ru',
     password: '',
   });
 
@@ -22,243 +27,459 @@ export default function AuthModal({ isOpen, onClose, onLogin }) {
     password: '',
   });
 
-  if (!isOpen) return null;
+  const [resetForm, setResetForm] = useState({
+    login: '',
+    method: 'sms',
+    code: '',
+    newPassword: '',
+  });
 
-  function saveAuth(data) {
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
+  const [resetStep, setResetStep] = useState('request');
+  const [devCode, setDevCode] = useState('');
+
+  if (!isOpen) {
+    return null;
   }
 
-  function showMessage(text, error = false) {
-    setMessage(text);
-    setIsError(error);
-  }
-
-  async function handleLogin(event) {
+  async function login(event) {
     event.preventDefault();
+    setLoading(true);
     setMessage('');
 
     try {
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(loginForm),
       });
 
-      const data = await response.json();
+      const data = await safeJson(response);
 
       if (!response.ok) {
-        throw new Error(data.message || 'Ошибка входа');
+        setMessage(data.message || 'Ошибка входа');
+        return;
       }
 
-      saveAuth(data);
-      showMessage('Успешный вход');
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
 
-      if (onLogin) onLogin(data.user);
+      onLogin?.(data.user);
+      onClose?.();
 
-      setTimeout(() => {
-        onClose();
-
-        if (data.user.role === 'admin') {
-          navigate('/admin');
-        } else {
-          navigate('/account');
-        }
-      }, 500);
-    } catch (error) {
-      showMessage(error.message, true);
+      window.location.reload();
+    } catch {
+      setMessage('Backend не отвечает. Проверьте server.js');
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function handleRegister(event) {
+  async function register(event) {
     event.preventDefault();
+    setLoading(true);
     setMessage('');
 
     try {
       const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(registerForm),
       });
 
-      const data = await response.json();
+      const data = await safeJson(response);
 
       if (!response.ok) {
-        throw new Error(data.message || 'Ошибка регистрации');
+        setMessage(data.message || 'Ошибка регистрации');
+        return;
       }
 
-      showMessage('Аккаунт создан. Теперь войдите.');
-      setRegisterForm({
-        name: '',
-        email: '',
-        phone: '',
-        password: '',
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      onLogin?.(data.user);
+      onClose?.();
+
+      window.location.reload();
+    } catch {
+      setMessage('Backend не отвечает. Проверьте server.js');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function requestResetCode(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await fetch(`${API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          login: resetForm.login,
+          method: resetForm.method,
+        }),
       });
 
-      setTimeout(() => {
-        setMode('login');
-      }, 700);
-    } catch (error) {
-      showMessage(error.message, true);
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        setMessage(data.message || 'Не удалось отправить код');
+        return;
+      }
+
+      setDevCode(data.dev_code || '');
+      setResetStep('code');
+      setMessage(data.message || 'Код отправлен');
+    } catch {
+      setMessage('Backend не отвечает. Проверьте server.js');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyCode(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await fetch(`${API_URL}/auth/verify-reset-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          login: resetForm.login,
+          code: resetForm.code,
+        }),
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        setMessage(data.message || 'Неверный код');
+        return;
+      }
+
+      setResetStep('password');
+      setMessage('Код подтверждён');
+    } catch {
+      setMessage('Backend не отвечает. Проверьте server.js');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resetPassword(event) {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await fetch(`${API_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          login: resetForm.login,
+          code: resetForm.code,
+          newPassword: resetForm.newPassword,
+        }),
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok) {
+        setMessage(data.message || 'Не удалось изменить пароль');
+        return;
+      }
+
+      setMessage('Пароль изменён. Теперь войдите.');
+      setMode('login');
+      setResetStep('request');
+      setLoginForm((prev) => ({
+        ...prev,
+        email: resetForm.login.includes('@') ? resetForm.login : prev.email,
+        password: '',
+      }));
+    } catch {
+      setMessage('Backend не отвечает. Проверьте server.js');
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div className="auth-overlay" onClick={onClose}>
-      <div className="auth-modal auth-modal-sport" onClick={(e) => e.stopPropagation()}>
+    <div className="auth-backdrop" onClick={onClose}>
+      <div className="auth-modal" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="auth-close" onClick={onClose}>
-          ✕
+          ×
         </button>
 
-        <div className="auth-hero">
-          <div className="auth-hero-badge">
-            <img src="/assets/logo-full.png" alt="TETIM" className="auth-logo" />
-          </div>
+        {mode === 'login' && (
+          <>
+            <h2>Вход</h2>
+            <p>Войдите в аккаунт TETIM</p>
 
-          <h2>{mode === 'login' ? 'Вход или регистрация' : 'Регистрация'}</h2>
+            <form className="auth-form" onSubmit={login}>
+              <input
+                type="email"
+                value={loginForm.email}
+                onChange={(event) =>
+                  setLoginForm((prev) => ({
+                    ...prev,
+                    email: event.target.value,
+                  }))
+                }
+                placeholder="Email"
+                required
+              />
 
-          <p>
-            {mode === 'login'
-              ? 'Войдите в аккаунт, чтобы быстрее оформлять заказы и видеть историю покупок'
-              : 'Создайте аккаунт для заказов, кабинета и персональных предложений'}
-          </p>
-        </div>
+              <input
+                type="password"
+                value={loginForm.password}
+                onChange={(event) =>
+                  setLoginForm((prev) => ({
+                    ...prev,
+                    password: event.target.value,
+                  }))
+                }
+                placeholder="Пароль"
+                required
+              />
 
-        <div className="auth-content">
-          <div className="auth-switcher">
+              <button type="submit" disabled={loading}>
+                {loading ? 'Входим...' : 'Войти'}
+              </button>
+            </form>
+
             <button
               type="button"
-              className={`auth-switcher-btn ${mode === 'login' ? 'active' : ''}`}
-              onClick={() => setMode('login')}
+              className="auth-link-btn"
+              onClick={() => {
+                setMode('forgot');
+                setMessage('');
+              }}
             >
-              Вход
+              Забыли пароль?
             </button>
 
             <button
               type="button"
-              className={`auth-switcher-btn ${mode === 'register' ? 'active' : ''}`}
-              onClick={() => setMode('register')}
+              className="auth-link-btn"
+              onClick={() => {
+                setMode('register');
+                setMessage('');
+              }}
             >
-              Регистрация
+              Создать аккаунт
             </button>
-          </div>
+          </>
+        )}
 
-          {mode === 'login' ? (
-            <form className="auth-form" onSubmit={handleLogin}>
-              <label className="auth-field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  placeholder="Введите email"
-                  required
-                  value={loginForm.email}
-                  onChange={(e) =>
-                    setLoginForm((prev) => ({
-                      ...prev,
-                      email: e.target.value,
-                    }))
-                  }
-                />
-              </label>
+        {mode === 'register' && (
+          <>
+            <h2>Регистрация</h2>
+            <p>Создайте аккаунт TETIM</p>
 
-              <label className="auth-field">
-                <span>Пароль</span>
-                <input
-                  type="password"
-                  placeholder="Введите пароль"
-                  required
-                  value={loginForm.password}
-                  onChange={(e) =>
-                    setLoginForm((prev) => ({
-                      ...prev,
-                      password: e.target.value,
-                    }))
-                  }
-                />
-              </label>
+            <form className="auth-form" onSubmit={register}>
+              <input
+                value={registerForm.name}
+                onChange={(event) =>
+                  setRegisterForm((prev) => ({
+                    ...prev,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Имя"
+                required
+              />
 
-              <button type="submit" className="auth-main-btn">
-                Войти
+              <input
+                type="email"
+                value={registerForm.email}
+                onChange={(event) =>
+                  setRegisterForm((prev) => ({
+                    ...prev,
+                    email: event.target.value,
+                  }))
+                }
+                placeholder="Email"
+                required
+              />
+
+              <input
+                value={registerForm.phone}
+                onChange={(event) =>
+                  setRegisterForm((prev) => ({
+                    ...prev,
+                    phone: event.target.value,
+                  }))
+                }
+                placeholder="Телефон"
+              />
+
+              <input
+                type="password"
+                value={registerForm.password}
+                onChange={(event) =>
+                  setRegisterForm((prev) => ({
+                    ...prev,
+                    password: event.target.value,
+                  }))
+                }
+                placeholder="Пароль"
+                required
+              />
+
+              <button type="submit" disabled={loading}>
+                {loading ? 'Создаём...' : 'Зарегистрироваться'}
               </button>
             </form>
-          ) : (
-            <form className="auth-form" onSubmit={handleRegister}>
-              <label className="auth-field">
-                <span>Имя</span>
+
+            <button
+              type="button"
+              className="auth-link-btn"
+              onClick={() => {
+                setMode('login');
+                setMessage('');
+              }}
+            >
+              Уже есть аккаунт
+            </button>
+          </>
+        )}
+
+        {mode === 'forgot' && (
+          <>
+            <h2>Восстановление пароля</h2>
+            <p>Выберите, куда отправить код</p>
+
+            {resetStep === 'request' && (
+              <form className="auth-form" onSubmit={requestResetCode}>
                 <input
-                  type="text"
-                  placeholder="Введите имя"
-                  required
-                  value={registerForm.name}
-                  onChange={(e) =>
-                    setRegisterForm((prev) => ({
+                  value={resetForm.login}
+                  onChange={(event) =>
+                    setResetForm((prev) => ({
                       ...prev,
-                      name: e.target.value,
+                      login: event.target.value,
                     }))
                   }
-                />
-              </label>
-
-              <label className="auth-field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  placeholder="Введите email"
+                  placeholder="Email или телефон"
                   required
-                  value={registerForm.email}
-                  onChange={(e) =>
-                    setRegisterForm((prev) => ({
+                />
+
+                <div className="reset-methods">
+                  <label className={resetForm.method === 'sms' ? 'reset-method active' : 'reset-method'}>
+                    <input
+                      type="radio"
+                      name="reset-method"
+                      value="sms"
+                      checked={resetForm.method === 'sms'}
+                      onChange={(event) =>
+                        setResetForm((prev) => ({
+                          ...prev,
+                          method: event.target.value,
+                        }))
+                      }
+                    />
+                    <span>SMS</span>
+                  </label>
+
+                  <label className={resetForm.method === 'email' ? 'reset-method active' : 'reset-method'}>
+                    <input
+                      type="radio"
+                      name="reset-method"
+                      value="email"
+                      checked={resetForm.method === 'email'}
+                      onChange={(event) =>
+                        setResetForm((prev) => ({
+                          ...prev,
+                          method: event.target.value,
+                        }))
+                      }
+                    />
+                    <span>Email</span>
+                  </label>
+                </div>
+
+                <button type="submit" disabled={loading}>
+                  {loading ? 'Отправляем...' : 'Получить код'}
+                </button>
+              </form>
+            )}
+
+            {resetStep === 'code' && (
+              <form className="auth-form" onSubmit={verifyCode}>
+                <input
+                  value={resetForm.code}
+                  onChange={(event) =>
+                    setResetForm((prev) => ({
                       ...prev,
-                      email: e.target.value,
+                      code: event.target.value,
                     }))
                   }
-                />
-              </label>
-
-              <label className="auth-field">
-                <span>Телефон</span>
-                <input
-                  type="tel"
-                  placeholder="+7 999 123 45 67"
+                  placeholder="Код"
                   required
-                  value={registerForm.phone}
-                  onChange={(e) =>
-                    setRegisterForm((prev) => ({
-                      ...prev,
-                      phone: e.target.value,
-                    }))
-                  }
                 />
-              </label>
 
-              <label className="auth-field">
-                <span>Пароль</span>
+                {devCode && (
+                  <div className="auth-dev-code">
+                    Тестовый код: <strong>{devCode}</strong>
+                  </div>
+                )}
+
+                <button type="submit" disabled={loading}>
+                  Подтвердить код
+                </button>
+              </form>
+            )}
+
+            {resetStep === 'password' && (
+              <form className="auth-form" onSubmit={resetPassword}>
                 <input
                   type="password"
-                  placeholder="Создайте пароль"
-                  required
-                  value={registerForm.password}
-                  onChange={(e) =>
-                    setRegisterForm((prev) => ({
+                  value={resetForm.newPassword}
+                  onChange={(event) =>
+                    setResetForm((prev) => ({
                       ...prev,
-                      password: e.target.value,
+                      newPassword: event.target.value,
                     }))
                   }
+                  placeholder="Новый пароль"
+                  required
                 />
-              </label>
 
-              <button type="submit" className="auth-main-btn">
-                Зарегистрироваться
-              </button>
-            </form>
-          )}
+                <button type="submit" disabled={loading}>
+                  Сменить пароль
+                </button>
+              </form>
+            )}
 
-          {message && (
-            <div className={`auth-message ${isError ? 'error' : ''}`}>
-              {message}
-            </div>
-          )}
-        </div>
+            <button
+              type="button"
+              className="auth-link-btn"
+              onClick={() => {
+                setMode('login');
+                setResetStep('request');
+                setMessage('');
+              }}
+            >
+              Вернуться ко входу
+            </button>
+          </>
+        )}
+
+        {message && <div className="auth-message">{message}</div>}
       </div>
     </div>
   );

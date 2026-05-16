@@ -1,434 +1,349 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import Header from '../components/Header.jsx';
 import Footer from '../components/Footer.jsx';
 
+import {
+  clearCart,
+  getCartItems,
+  removeCartItem,
+  updateCartItemQuantity,
+} from '../utils/cartStorage.js';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
 function formatPrice(value) {
   return `${Number(value || 0).toLocaleString('ru-RU')} ₽`;
 }
 
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function getStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null');
+  } catch {
+    return null;
+  }
+}
+
 export default function Cart() {
-  const [cart, setCart] = useState([]);
+  const [items, setItems] = useState(() => getCartItems());
+  const [user] = useState(() => getStoredUser());
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
 
   const [orderForm, setOrderForm] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    deliveryType: 'delivery',
+    customer_name: user?.name || '',
+    phone: user?.phone || '',
+    email: user?.email || '',
     address: '',
     comment: '',
   });
 
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-
   useEffect(() => {
-    loadCart();
-
-    if (user) {
-      setOrderForm((prev) => ({
-        ...prev,
-        name: user.name || '',
-        phone: user.phone || '',
-        email: user.email || '',
-      }));
+    function syncCart() {
+      setItems(getCartItems());
     }
+
+    syncCart();
+
+    window.addEventListener('storage', syncCart);
+    window.addEventListener('tetim-cart-updated', syncCart);
+    window.addEventListener('focus', syncCart);
+
+    return () => {
+      window.removeEventListener('storage', syncCart);
+      window.removeEventListener('tetim-cart-updated', syncCart);
+      window.removeEventListener('focus', syncCart);
+    };
   }, []);
 
-  function loadCart() {
-    const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
-    setCart(savedCart);
+  const totalQuantity = useMemo(() => {
+    return items.reduce((sum, item) => {
+      return sum + Number(item.quantity || 1);
+    }, 0);
+  }, [items]);
+
+  const totalPrice = useMemo(() => {
+    return items.reduce((sum, item) => {
+      return sum + Number(item.price || 0) * Number(item.quantity || 1);
+    }, 0);
+  }, [items]);
+
+  function showMessage(text) {
+    setMessage(text);
+
+    setTimeout(() => {
+      setMessage('');
+    }, 3500);
   }
 
-  function saveCart(nextCart) {
-    localStorage.setItem('cart', JSON.stringify(nextCart));
-    setCart(nextCart);
+  function changeQuantity(index, quantity) {
+    const nextItems = updateCartItemQuantity(index, quantity);
+    setItems(nextItems);
   }
 
-  function increaseItem(productId) {
-    const nextCart = cart.map((item) => {
-      if (Number(item.id) === Number(productId)) {
-        return {
-          ...item,
-          quantity: Number(item.quantity || 0) + 1,
-        };
-      }
-
-      return item;
-    });
-
-    saveCart(nextCart);
+  function deleteItem(index) {
+    const nextItems = removeCartItem(index);
+    setItems(nextItems);
+    showMessage('Товар удалён из корзины');
   }
 
-  function decreaseItem(productId) {
-    const nextCart = cart
-      .map((item) => {
-        if (Number(item.id) === Number(productId)) {
-          return {
-            ...item,
-            quantity: Number(item.quantity || 0) - 1,
-          };
-        }
-
-        return item;
-      })
-      .filter((item) => Number(item.quantity) > 0);
-
-    saveCart(nextCart);
+  function emptyCart() {
+    clearCart();
+    setItems([]);
+    showMessage('Корзина очищена');
   }
 
-  function removeItem(productId) {
-    const nextCart = cart.filter(
-      (item) => Number(item.id) !== Number(productId)
-    );
-
-    saveCart(nextCart);
-  }
-
-  function clearCart() {
-    saveCart([]);
-    setMessage('');
-  }
-
-  function handleChange(event) {
-    const { name, value } = event.target;
-
-    setOrderForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  }
-
-  async function submitOrder(event) {
+  async function createOrder(event) {
     event.preventDefault();
 
-    if (!cart.length) {
-      setMessage('Корзина пуста. Добавьте товары перед оформлением.');
+    if (!items.length) {
+      showMessage('Корзина пустая');
       return;
     }
 
-    if (!orderForm.name.trim() || !orderForm.phone.trim()) {
-      setMessage('Введите имя и телефон.');
+    if (!orderForm.customer_name || !orderForm.phone) {
+      showMessage('Заполните имя и телефон');
       return;
     }
 
-    if (orderForm.deliveryType === 'delivery' && !orderForm.address.trim()) {
-      setMessage('Введите адрес доставки или выберите самовывоз.');
-      return;
-    }
+    setLoading(true);
+    setMessage('');
 
     try {
-      const token = localStorage.getItem('token');
-
-      const response = await fetch('http://localhost:4000/api/orders', {
+      const response = await fetch(`${API_URL}/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          customer: {
-            name: orderForm.name,
-            phone: orderForm.phone,
-            email: orderForm.email,
-          },
-          items: cart,
-          total,
-          deliveryType: orderForm.deliveryType,
-          address:
-            orderForm.deliveryType === 'delivery'
-              ? orderForm.address
-              : 'Самовывоз: Якутск, ул. Дежнева, д. 30',
+          user_id: user?.id || null,
+          customer_name: orderForm.customer_name,
+          phone: orderForm.phone,
+          email: orderForm.email,
+          address: orderForm.address,
           comment: orderForm.comment,
+          items: items.map((item) => ({
+            product_id: item.product_id || item.id,
+            id: item.id,
+            name: item.name,
+            product_name: item.name,
+            price: Number(item.price || 0),
+            quantity: Number(item.quantity || 1),
+            size: item.size || '',
+          })),
         }),
       });
 
-      const data = await response.json();
+      const data = await safeJson(response);
 
       if (!response.ok) {
-        setMessage(data.message || 'Ошибка оформления заказа');
+        showMessage(data.message || 'Не удалось оформить заказ');
         return;
       }
 
-      saveCart([]);
+      clearCart();
+      setItems([]);
 
-      setOrderForm({
-        name: '',
-        phone: '',
-        email: '',
-        deliveryType: 'delivery',
-        address: '',
-        comment: '',
-      });
-
-      setMessage('');
-      setIsSuccessOpen(true);
-    } catch (error) {
-      setMessage('Не удалось отправить заказ. Проверьте backend.');
+      showMessage(`Заказ №${data.order_id || ''} оформлен`);
+    } catch {
+      showMessage('Backend не отвечает. Проверьте server.js');
+    } finally {
+      setLoading(false);
     }
   }
 
-  const cartCount = cart.reduce(
-    (sum, item) => sum + Number(item.quantity || 0),
-    0
-  );
-
-  const total = cart.reduce(
-    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
-    0
-  );
-
   return (
     <>
-      <Header cartCount={cartCount} />
+      <Header />
 
-      <main className="container cart-page">
-        <div className="cart-title-row">
-          <div>
-            <h1>Корзина</h1>
-            <p>Проверьте товары и оформите заказ</p>
-          </div>
+      <main className="cart-page">
+        <section className="container cart-layout">
+          <div className="cart-main">
+            <div className="cart-head">
+              <div>
+                <h1>Корзина</h1>
+                <p>Товаров: {totalQuantity}</p>
+              </div>
 
-          {cart.length > 0 && (
-            <button className="clear-cart-btn" type="button" onClick={clearCart}>
-              Очистить корзину
-            </button>
-          )}
-        </div>
+              {items.length > 0 && (
+                <button
+                  type="button"
+                  className="cart-clear-btn"
+                  onClick={emptyCart}
+                >
+                  Очистить корзину
+                </button>
+              )}
+            </div>
 
-        <div className="cart-layout">
-          <section className="cart-items-card">
-            <h2>Товары</h2>
-
-            {cart.length === 0 ? (
-              <div className="empty-cart-box">
-                <h3>Корзина пуста</h3>
+            {items.length === 0 ? (
+              <div className="cart-empty">
+                <h2>Корзина пустая</h2>
                 <p>Добавьте товары из каталога, чтобы оформить заказ.</p>
 
-                <Link to="/catalog" className="btn btn-dark">
-                  Перейти в каталог
-                </Link>
+                <Link to="/catalog">Перейти в каталог</Link>
               </div>
             ) : (
-              <div className="cart-items-list">
-                {cart.map((item) => (
-                  <div className="cart-product-row" key={item.id}>
-                    <div className="cart-product-image">
-                      {item.image || item.image_url ? (
-                        <img
-                          src={item.image || item.image_url}
-                          alt={item.name}
-                        />
+              <div className="cart-items">
+                {items.map((item, index) => (
+                  <article
+                    key={`${item.id}-${item.size}-${index}`}
+                    className="cart-item"
+                  >
+                    <div className="cart-item-image">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} />
                       ) : (
-                        <span>TETIM</span>
+                        <span>Нет фото</span>
                       )}
                     </div>
 
-                    <div className="cart-product-info">
-                      <Link to={`/product/${item.id}`} className="cart-product-name">
-                        {item.name}
-                      </Link>
+                    <div className="cart-item-info">
+                      <h3>{item.name}</h3>
 
-                      <div className="cart-product-meta">
-                        {item.size ? `Размер: ${item.size}` : 'Размер не выбран'}
-                      </div>
+                      {item.size && <p>Размер: {item.size}</p>}
 
-                      <div className="cart-product-price">
-                        {formatPrice(item.price)}
-                      </div>
+                      <strong>{formatPrice(item.price)}</strong>
                     </div>
 
-                    <div className="cart-product-controls">
-                      <div className="cart-stepper cart-stepper-small">
-                        <button
-                          type="button"
-                          onClick={() => decreaseItem(item.id)}
-                        >
-                          −
-                        </button>
+                    <div className="cart-quantity">
+                      <button
+                        type="button"
+                        disabled={Number(item.quantity || 1) <= 1}
+                        onClick={() =>
+                          changeQuantity(index, Number(item.quantity || 1) - 1)
+                        }
+                      >
+                        −
+                      </button>
 
-                        <span>{item.quantity} шт.</span>
-
-                        <button
-                          type="button"
-                          onClick={() => increaseItem(item.id)}
-                        >
-                          +
-                        </button>
-                      </div>
+                      <input
+                        type="number"
+                        min="1"
+                        value={Number(item.quantity || 1)}
+                        onChange={(event) =>
+                          changeQuantity(index, event.target.value)
+                        }
+                      />
 
                       <button
-                        className="cart-remove-btn"
                         type="button"
-                        onClick={() => removeItem(item.id)}
+                        onClick={() =>
+                          changeQuantity(index, Number(item.quantity || 1) + 1)
+                        }
                       >
-                        Удалить
+                        +
                       </button>
                     </div>
 
-                    <div className="cart-product-total">
-                      {formatPrice(Number(item.price) * Number(item.quantity))}
+                    <div className="cart-item-total">
+                      <strong>
+                        {formatPrice(
+                          Number(item.price || 0) *
+                            Number(item.quantity || 1)
+                        )}
+                      </strong>
+
+                      <button type="button" onClick={() => deleteItem(index)}>
+                        Удалить
+                      </button>
                     </div>
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
-          </section>
+          </div>
 
-          <aside className="cart-summary-card">
-            <h2>Итого</h2>
+          <aside className="cart-summary">
+            <h2>Оформление заказа</h2>
 
-            <div className="cart-summary-row">
-              <span>Товаров</span>
-              <strong>{cartCount}</strong>
+            <div className="cart-summary-line">
+              <span>Товары</span>
+              <strong>{formatPrice(totalPrice)}</strong>
             </div>
 
-            <div className="cart-summary-row">
-              <span>Сумма</span>
-              <strong>{formatPrice(total)}</strong>
+            <div className="cart-summary-line">
+              <span>Итого</span>
+              <strong>{formatPrice(totalPrice)}</strong>
             </div>
 
-            <div className="cart-summary-total">
-              <span>К оплате</span>
-              <strong>{formatPrice(total)}</strong>
-            </div>
+            <form className="cart-order-form" onSubmit={createOrder}>
+              <input
+                value={orderForm.customer_name}
+                onChange={(event) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    customer_name: event.target.value,
+                  }))
+                }
+                placeholder="Ваше имя"
+                required
+              />
 
-            <form className="cart-order-form" onSubmit={submitOrder}>
-              <h3>Оформление заказа</h3>
+              <input
+                value={orderForm.phone}
+                onChange={(event) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    phone: event.target.value,
+                  }))
+                }
+                placeholder="Телефон"
+                required
+              />
 
-              {user ? (
-                <div className="cart-account-box">
-                  <strong>Заказ будет оформлен на аккаунт</strong>
-                  <span>{orderForm.name}</span>
-                  <span>{orderForm.phone}</span>
-                  <span>{orderForm.email}</span>
-                </div>
-              ) : (
-                <>
-                  <input
-                    name="name"
-                    value={orderForm.name}
-                    onChange={handleChange}
-                    placeholder="Ваше имя"
-                    required
-                  />
+              <input
+                type="email"
+                value={orderForm.email}
+                onChange={(event) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    email: event.target.value,
+                  }))
+                }
+                placeholder="Email"
+              />
 
-                  <input
-                    name="phone"
-                    value={orderForm.phone}
-                    onChange={handleChange}
-                    placeholder="Телефон"
-                    required
-                  />
-
-                  <input
-                    name="email"
-                    type="email"
-                    value={orderForm.email}
-                    onChange={handleChange}
-                    placeholder="Email"
-                  />
-                </>
-              )}
-
-              <div className="delivery-choice">
-                <label className={orderForm.deliveryType === 'delivery' ? 'active' : ''}>
-                  <input
-                    type="radio"
-                    name="deliveryType"
-                    value="delivery"
-                    checked={orderForm.deliveryType === 'delivery'}
-                    onChange={handleChange}
-                  />
-
-                  <span>
-                    <strong>Доставка</strong>
-                    <small>Курьером по адресу</small>
-                  </span>
-                </label>
-
-                <label className={orderForm.deliveryType === 'pickup' ? 'active' : ''}>
-                  <input
-                    type="radio"
-                    name="deliveryType"
-                    value="pickup"
-                    checked={orderForm.deliveryType === 'pickup'}
-                    onChange={handleChange}
-                  />
-
-                  <span>
-                    <strong>Самовывоз</strong>
-                    <small>ул. Дежнева, д. 30</small>
-                  </span>
-                </label>
-              </div>
-
-              {orderForm.deliveryType === 'delivery' ? (
-                <input
-                  name="address"
-                  value={orderForm.address}
-                  onChange={handleChange}
-                  placeholder="Адрес доставки"
-                  required
-                />
-              ) : (
-                <div className="pickup-box">
-                  <strong>Пункт самовывоза</strong>
-                  <span>Якутск, ул. Дежнева, д. 30</span>
-                  <small>
-                    После оформления заказа мы свяжемся с вами для подтверждения.
-                  </small>
-                </div>
-              )}
+              <input
+                value={orderForm.address}
+                onChange={(event) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    address: event.target.value,
+                  }))
+                }
+                placeholder="Адрес доставки"
+              />
 
               <textarea
-                name="comment"
                 value={orderForm.comment}
-                onChange={handleChange}
+                onChange={(event) =>
+                  setOrderForm((prev) => ({
+                    ...prev,
+                    comment: event.target.value,
+                  }))
+                }
                 placeholder="Комментарий к заказу"
               />
 
-              <button className="btn btn-dark full-width" type="submit">
-                Оформить заказ
+              <button type="submit" disabled={loading || items.length === 0}>
+                {loading ? 'Оформляем...' : 'Оформить заказ'}
               </button>
             </form>
 
-            {message && <div className="message error-message">{message}</div>}
+            {message && <div className="cart-message">{message}</div>}
           </aside>
-        </div>
+        </section>
       </main>
-
-      {isSuccessOpen && (
-        <div className="order-success-overlay">
-          <div className="order-success-modal">
-            <button
-              className="order-success-close"
-              type="button"
-              onClick={() => setIsSuccessOpen(false)}
-            >
-              ✕
-            </button>
-
-            <div className="order-success-icon">✓</div>
-
-            <h2>Заказ оформлен</h2>
-
-            <p>
-              Мы свяжемся с вами для подтверждения заказа с 10:00 до 19:30.
-            </p>
-
-            <Link
-              to="/catalog"
-              className="btn btn-dark"
-              onClick={() => setIsSuccessOpen(false)}
-            >
-              Вернуться в каталог
-            </Link>
-          </div>
-        </div>
-      )}
 
       <Footer />
     </>

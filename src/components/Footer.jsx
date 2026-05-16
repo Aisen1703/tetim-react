@@ -9,6 +9,27 @@ export default function Footer() {
     ? `tel:${settings.phone.replace(/[^\d+]/g, '')}`
     : '';
 
+  const socialLinks = [
+    {
+      key: 'instagram',
+      title: 'Instagram',
+      url: settings.instagram_url,
+      icon: '/assets/social/instagram.png',
+    },
+    {
+      key: 'whatsapp',
+      title: 'WhatsApp',
+      url: settings.whatsapp_url,
+      icon: '/assets/social/whatsapp.png',
+    },
+    {
+      key: 'extra',
+      title: 'Соцсеть',
+      url: settings.social_extra_url,
+      icon: '/assets/social/social-extra.png',
+    },
+  ].filter((item) => item.url);
+
   return (
     <footer className="footer-mega">
       <div className="container footer-mega-top">
@@ -27,6 +48,23 @@ export default function Footer() {
             {settings.footer_text ||
               'TETIM — локальный бренд одежды для города, спорта и активной жизни.'}
           </p>
+
+          {socialLinks.length > 0 && (
+            <div className="footer-social-icons">
+              {socialLinks.map((item) => (
+                <a
+                  key={item.key}
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={item.title}
+                  aria-label={item.title}
+                >
+                  <img src={item.icon} alt="" />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="footer-col">
@@ -65,26 +103,6 @@ export default function Footer() {
           {settings.address && (
             <span className="footer-contact-link">{settings.address}</span>
           )}
-
-          <div className="footer-socials">
-            {settings.whatsapp_url && (
-              <a href={settings.whatsapp_url} target="_blank" rel="noreferrer">
-                WA
-              </a>
-            )}
-
-            {settings.telegram_url && (
-              <a href={settings.telegram_url} target="_blank" rel="noreferrer">
-                TG
-              </a>
-            )}
-
-            {settings.instagram_url && (
-              <a href={settings.instagram_url} target="_blank" rel="noreferrer">
-                IG
-              </a>
-            )}
-          </div>
         </div>
       </div>
 
