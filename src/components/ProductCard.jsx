@@ -24,21 +24,68 @@ function normalizeSize(size) {
   return String(size || '').trim().toUpperCase();
 }
 
-function getProductSizes(product) {
+function parseProductSizes(product) {
   const rawSizes = product.sizes || product.size || '';
+  const totalStock = Number(product.stock || 0);
 
-  const productSizes = Array.isArray(rawSizes)
-    ? rawSizes.map(normalizeSize)
-    : String(rawSizes || '')
+  if (!rawSizes) {
+    return allowedSizes.map((size) => ({
+      size,
+      stock: totalStock,
+      available: totalStock > 0,
+    }));
+  }
+
+  const parts = Array.isArray(rawSizes)
+    ? rawSizes
+    : String(rawSizes)
         .split(',')
-        .map(normalizeSize)
+        .map((item) => item.trim())
         .filter(Boolean);
 
-  const filteredSizes = allowedSizes.filter((size) =>
-    productSizes.includes(size)
-  );
+  const parsed = [];
 
-  return filteredSizes.length > 0 ? filteredSizes : allowedSizes;
+  for (const part of parts) {
+    const text = String(part || '').trim();
+
+    if (!text) continue;
+
+    if (text.includes(':')) {
+      const [rawSize, rawStock] = text.split(':').map((item) => item.trim());
+      const size = normalizeSize(rawSize);
+      const stock = Math.max(0, Number(rawStock || 0));
+
+      if (allowedSizes.includes(size)) {
+        parsed.push({
+          size,
+          stock,
+          available: stock > 0,
+        });
+      }
+    } else {
+      const size = normalizeSize(text);
+
+      if (allowedSizes.includes(size)) {
+        parsed.push({
+          size,
+          stock: totalStock,
+          available: totalStock > 0,
+        });
+      }
+    }
+  }
+
+  const sorted = allowedSizes
+    .map((size) => parsed.find((item) => item.size === size))
+    .filter(Boolean);
+
+  return sorted.length > 0
+    ? sorted
+    : allowedSizes.map((size) => ({
+        size,
+        stock: totalStock,
+        available: totalStock > 0,
+      }));
 }
 
 function getItemQuantity(productId, size = '') {
@@ -56,17 +103,26 @@ function getItemQuantity(productId, size = '') {
 
 export default function ProductCard({ product }) {
   const productId = product?.id || product?.product_id;
-  const sizes = useMemo(() => getProductSizes(product || {}), [product]);
 
-  const [selectedSize, setSelectedSize] = useState(sizes[0] || 'M');
+  const sizeItems = useMemo(() => parseProductSizes(product || {}), [product]);
+
+  const firstAvailableSize =
+    sizeItems.find((item) => item.available)?.size || sizeItems[0]?.size || 'M';
+
+  const [selectedSize, setSelectedSize] = useState(firstAvailableSize);
   const [quantity, setQuantity] = useState(0);
 
   const imageUrl = getProductImage(product || {});
-  const stock = Number(product?.stock || 0);
+
+  const selectedSizeData =
+    sizeItems.find((item) => item.size === selectedSize) || sizeItems[0];
+
+  const selectedSizeStock = Number(selectedSizeData?.stock || 0);
+  const totalStock = sizeItems.reduce((sum, item) => sum + Number(item.stock || 0), 0);
 
   useEffect(() => {
-    setSelectedSize(sizes[0] || 'M');
-  }, [sizes]);
+    setSelectedSize(firstAvailableSize);
+  }, [firstAvailableSize]);
 
   useEffect(() => {
     function syncQuantity() {
@@ -94,6 +150,10 @@ export default function ProductCard({ product }) {
     event.preventDefault();
     event.stopPropagation();
 
+    if (selectedSizeStock <= 0) {
+      return;
+    }
+
     addCartItem(product, selectedSize);
     setQuantity(getItemQuantity(productId, selectedSize));
   }
@@ -102,7 +162,7 @@ export default function ProductCard({ product }) {
     event.preventDefault();
     event.stopPropagation();
 
-    if (quantity >= stock) {
+    if (quantity >= selectedSizeStock) {
       return;
     }
 
@@ -139,12 +199,17 @@ export default function ProductCard({ product }) {
           <div className="product-size-box">
             <div className="product-size-title">
               <span>Размер</span>
-              <strong>{selectedSize}</strong>
+
+              <strong>
+                {selectedSize}
+              </strong>
             </div>
 
             <div className="product-size-list">
               {allowedSizes.map((size) => {
-                const isAvailable = sizes.includes(size);
+                const sizeData = sizeItems.find((item) => item.size === size);
+                const isAvailable = Number(sizeData?.stock || 0) > 0;
+                const stock = Number(sizeData?.stock || 0);
 
                 return (
                   <button
@@ -152,6 +217,7 @@ export default function ProductCard({ product }) {
                     type="button"
                     className={selectedSize === size ? 'active' : ''}
                     disabled={!isAvailable}
+                    title={isAvailable ? `Остаток: ${stock}` : 'Нет в наличии'}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -162,7 +228,8 @@ export default function ProductCard({ product }) {
                       setQuantity(getItemQuantity(productId, size));
                     }}
                   >
-                    {size}
+                    <span>{size}</span>
+                    <small>{stock}</small>
                   </button>
                 );
               })}
@@ -170,7 +237,11 @@ export default function ProductCard({ product }) {
           </div>
 
           <p className="product-stock">
-            Остаток: {stock}
+            Остаток размера {selectedSize}: {selectedSizeStock}
+          </p>
+
+          <p className="product-stock total">
+            Всего: {totalStock}
           </p>
         </div>
       </Link>
@@ -178,7 +249,7 @@ export default function ProductCard({ product }) {
       <div className="product-card-bottom">
         <strong>{formatPrice(product.price)}</strong>
 
-        {stock <= 0 ? (
+        {selectedSizeStock <= 0 ? (
           <button type="button" disabled>
             Нет в наличии
           </button>
@@ -193,7 +264,7 @@ export default function ProductCard({ product }) {
             <button
               type="button"
               onClick={handleIncrease}
-              disabled={quantity >= stock}
+              disabled={quantity >= selectedSizeStock}
             >
               +
             </button>

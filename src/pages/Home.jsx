@@ -4,9 +4,10 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header.jsx';
 import Footer from '../components/Footer.jsx';
 import HeroSlider from '../components/HeroSlider.jsx';
+import ProductCard from '../components/ProductCard.jsx';
 import useSiteSettings from '../hooks/useSiteSettings.js';
 
-const API_URL = 'http://localhost:4000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 const POPULAR_CATEGORIES = [
   { title: 'Спортивные костюмы', category: 'suits' },
@@ -18,21 +19,43 @@ const POPULAR_CATEGORIES = [
   { title: 'Аксессуары', category: 'accessories' },
 ];
 
-function formatPrice(value) {
-  return `${Number(value || 0).toLocaleString('ru-RU')} ₽`;
+const categoryLabels = {
+  accessories: 'Аксессуары',
+  sale: 'Акционные товары',
+  'pants-shorts': 'Брюки и Шорты',
+  headwear: 'Головные уборы',
+  sweatshirts: 'Джемпера, свитшоты, толстовки',
+  vests: 'Жилеты',
+  suits: 'Костюмы, комплекты',
+  jackets: 'Пуховики, куртки, ветровки',
+  shirts: 'Рубашки',
+  'tshirts-longsleeves': 'Футболки и Лонгсливы',
+  bags: 'Сумки',
+  backpacks: 'Рюкзаки',
+  caps: 'Кепки',
+  hats: 'Шапки',
+  socks: 'Носки',
+  belts: 'Ремни',
+};
+
+function getCategoryLabel(category) {
+  return categoryLabels[category] || category || 'Категория';
 }
 
 function normalizeProduct(product) {
   return {
+    ...product,
     id: Number(product.id),
+    product_id: Number(product.id),
     external_id: product.external_id || '',
     article: product.article || '',
     name: product.name || 'Товар',
-    category: product.category || 'catalog',
+    category: product.category || 'accessories',
+    category_label: getCategoryLabel(product.category),
     price: Number(product.price || 0),
     sizes: product.sizes || '',
     stock: Number(product.stock || 0),
-    image:
+    image_url:
       product.image_url ||
       product.image ||
       'https://placehold.co/600x720?text=TETIM',
@@ -44,126 +67,41 @@ export default function Home() {
   const settings = useSiteSettings();
 
   const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState([]);
-  const [toast, setToast] = useState(null);
-
-  const cartCount = cart.reduce(
-    (sum, item) => sum + Number(item.quantity || 0),
-    0
-  );
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productsMessage, setProductsMessage] = useState('');
 
   useEffect(() => {
     loadProducts();
-    loadCart();
   }, []);
 
   async function loadProducts() {
+    setLoadingProducts(true);
+    setProductsMessage('');
+
     try {
       const response = await fetch(`${API_URL}/public/products`);
       const data = await response.json();
 
-      if (response.ok) {
-        setProducts((data.products || []).map(normalizeProduct));
-      } else {
+      if (!response.ok) {
         setProducts([]);
-      }
-    } catch {
-      setProducts([]);
-    }
-  }
-
-  function loadCart() {
-    const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
-    setCart(savedCart);
-  }
-
-  function saveCart(nextCart) {
-    localStorage.setItem('cart', JSON.stringify(nextCart));
-    setCart(nextCart);
-  }
-
-  function showToast(message, type = 'info') {
-    setToast({
-      message,
-      type,
-    });
-
-    setTimeout(() => {
-      setToast(null);
-    }, 2500);
-  }
-
-  function getCartItem(productId) {
-    return cart.find((item) => Number(item.id) === Number(productId));
-  }
-
-  function addToCart(product) {
-    const stockLimit = Number(product.stock || 0);
-
-    if (stockLimit <= 0) {
-      showToast('Товара нет в наличии', 'warning');
-      return;
-    }
-
-    const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
-
-    const existing = currentCart.find(
-      (item) => Number(item.id) === Number(product.id)
-    );
-
-    if (existing) {
-      const currentQuantity = Number(existing.quantity || 0);
-
-      if (currentQuantity >= stockLimit) {
-        showToast(`Нельзя добавить больше ${stockLimit} шт.`, 'warning');
+        setProductsMessage(data.message || 'Не удалось загрузить товары');
         return;
       }
 
-      existing.quantity = currentQuantity + 1;
-      existing.stock = stockLimit;
-
-      showToast('Количество обновлено', 'success');
-    } else {
-      currentCart.push({
-        id: Number(product.id),
-        external_id: product.external_id,
-        article: product.article,
-        name: product.name,
-        price: Number(product.price),
-        quantity: 1,
-        image: product.image,
-        size: product.sizes || '',
-        stock: stockLimit,
-      });
-
-      showToast('Товар добавлен в корзину', 'success');
+      setProducts((data.products || []).map(normalizeProduct));
+    } catch {
+      setProducts([]);
+      setProductsMessage('Backend не отвечает. Проверьте server.js');
+    } finally {
+      setLoadingProducts(false);
     }
-
-    saveCart(currentCart);
   }
 
-  function decreaseQuantity(productId) {
-    const currentCart = JSON.parse(localStorage.getItem('cart') || '[]');
-
-    const nextCart = currentCart
-      .map((item) => {
-        if (Number(item.id) !== Number(productId)) {
-          return item;
-        }
-
-        return {
-          ...item,
-          quantity: Number(item.quantity || 0) - 1,
-        };
-      })
-      .filter((item) => Number(item.quantity || 0) > 0);
-
-    saveCart(nextCart);
-  }
+  const hitProducts = products.slice(0, 8);
 
   return (
     <>
-      <Header cartCount={cartCount} />
+      <Header />
 
       <main>
         <section className="container hero-section">
@@ -174,9 +112,12 @@ export default function Home() {
               <span className="pill">{settings.hero_badge}</span>
             )}
 
-            <h1>{settings.hero_title}</h1>
+            <h1>{settings.hero_title || 'Одежда с характером Севера'}</h1>
 
-            <p>{settings.hero_text}</p>
+            <p>
+              {settings.hero_text ||
+                'Создаём одежду для города, спорта и активной жизни — с вниманием к деталям, комфорту и северному характеру.'}
+            </p>
 
             <div className="hero-actions">
               <Link to="/catalog" className="btn btn-dark">
@@ -215,97 +156,29 @@ export default function Home() {
             </Link>
           </div>
 
-          {products.length === 0 ? (
+          {loadingProducts ? (
+            <div className="card-lite">
+              <h3>Загрузка товаров...</h3>
+              <p>Подождите немного.</p>
+            </div>
+          ) : productsMessage ? (
+            <div className="card-lite">
+              <h3>Ошибка загрузки</h3>
+              <p>{productsMessage}</p>
+            </div>
+          ) : hitProducts.length === 0 ? (
             <div className="card-lite">
               <h3>Товаров пока нет</h3>
               <p>Опубликуйте товары в админ-панели.</p>
             </div>
           ) : (
-            <div className="products-grid">
-              {products.slice(0, 8).map((product) => {
-                const cartItem = getCartItem(product.id);
-                const quantity = Number(cartItem?.quantity || 0);
-                const stockLimit = Number(product.stock || 0);
-                const isMaxQuantity = quantity >= stockLimit;
-
-                return (
-                  <article className="product-card" key={product.id}>
-                    <Link
-                      to={`/product/${product.id}`}
-                      className="product-image"
-                    >
-                      <img src={product.image} alt={product.name} />
-                    </Link>
-
-                    <div className="product-card-body">
-                      <Link
-                        to={`/product/${product.id}`}
-                        className="product-title"
-                      >
-                        {product.name}
-                      </Link>
-
-                      <div className="product-card-meta">
-                        {product.sizes
-                          ? `Размеры: ${product.sizes}`
-                          : 'Размеры уточняйте'}
-                      </div>
-
-                      <div className="product-card-bottom">
-                        <strong>{formatPrice(product.price)}</strong>
-
-                        {stockLimit <= 0 ? (
-                          <button
-                            className="btn btn-dark"
-                            type="button"
-                            disabled
-                          >
-                            Нет в наличии
-                          </button>
-                        ) : quantity > 0 ? (
-                          <div className="quantity-control">
-                            <button
-                              type="button"
-                              aria-label="Уменьшить количество"
-                              onClick={() => decreaseQuantity(product.id)}
-                            >
-                              −
-                            </button>
-
-                            <span>{quantity}</span>
-
-                            <button
-                              type="button"
-                              aria-label="Увеличить количество"
-                              disabled={isMaxQuantity}
-                              onClick={() => addToCart(product)}
-                            >
-                              +
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            className="btn btn-dark"
-                            type="button"
-                            onClick={() => addToCart(product)}
-                          >
-                            В корзину
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+            <div className="products-grid home-products-grid">
+              {hitProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
             </div>
           )}
         </section>
-
-        {toast && (
-          <div className={`toast-message toast-${toast.type}`}>
-            <span>{toast.message}</span>
-          </div>
-        )}
       </main>
 
       <Footer />

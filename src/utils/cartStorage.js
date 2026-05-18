@@ -37,13 +37,36 @@ export function getCartTotal() {
   }, 0);
 }
 
+function getProductSizeStock(product, size) {
+  const rawSizes = String(product.sizes || '');
+
+  if (!size) {
+    return Number(product.stock || 0);
+  }
+
+  const parts = rawSizes
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  for (const part of parts) {
+    const [rawSize, rawStock] = part.split(':').map((item) => item.trim());
+
+    if (String(rawSize || '').toUpperCase() === String(size || '').toUpperCase()) {
+      return Math.max(0, Number(rawStock || 0));
+    }
+  }
+
+  return Number(product.stock || 0);
+}
+
 export function addCartItem(product, size = '') {
   const items = getCartItems();
 
   const productId = product.id || product.product_id;
-  const maxStock = Math.max(0, Number(product.stock || 0));
+  const sizeStock = getProductSizeStock(product, size);
 
-  if (!productId || maxStock <= 0) {
+  if (!productId || sizeStock <= 0) {
     return items;
   }
 
@@ -59,8 +82,9 @@ export function addCartItem(product, size = '') {
 
     items[existingIndex] = {
       ...items[existingIndex],
-      quantity: Math.min(currentQuantity + 1, maxStock),
-      max_stock: maxStock,
+      quantity: Math.min(currentQuantity + 1, sizeStock),
+      max_stock: sizeStock,
+      size_stock: sizeStock,
     };
   } else {
     items.push({
@@ -72,7 +96,8 @@ export function addCartItem(product, size = '') {
       image_url: product.image_url || product.image || '',
       size,
       quantity: 1,
-      max_stock: maxStock,
+      max_stock: sizeStock,
+      size_stock: sizeStock,
     });
   }
 
@@ -114,7 +139,11 @@ export function updateCartItemQuantity(index, quantity) {
       return item;
     }
 
-    const maxStock = Math.max(1, Number(item.max_stock || item.stock || 999));
+    const maxStock = Math.max(
+      1,
+      Number(item.max_stock || item.size_stock || item.stock || 999)
+    );
+
     const nextQuantity = Math.max(1, Math.min(Number(quantity || 1), maxStock));
 
     return {
