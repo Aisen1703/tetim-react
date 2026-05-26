@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = 'http://localhost:4000/api';
+// Используем переменную окружения для адреса бэкенда
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function getMediaUrl(url) {
-  if (!url) {
-    return '';
-  }
-
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return url;
-  }
-
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  // Если URL начинается с /uploads, то это относительный путь к файлам на бэкенде
+  if (url.startsWith('/uploads')) return `${API_URL}${url}`;
   return url;
 }
 
@@ -23,28 +20,18 @@ export default function HeroSlider() {
   }, []);
 
   useEffect(() => {
-    if (slides.length <= 1) {
-      return;
-    }
-
+    if (slides.length <= 1) return;
     const timer = setInterval(() => {
-      setActiveIndex((prev) => {
-        if (prev >= slides.length - 1) {
-          return 0;
-        }
-
-        return prev + 1;
-      });
+      setActiveIndex((prev) => (prev >= slides.length - 1 ? 0 : prev + 1));
     }, 4000);
-
     return () => clearInterval(timer);
   }, [slides.length]);
 
   async function loadSlides() {
     try {
+      // Запрос к публичному API слайдов
       const response = await fetch(`${API_URL}/public/slides`);
       const data = await response.json();
-
       if (response.ok) {
         setSlides(data.slides || []);
       } else {
@@ -69,33 +56,20 @@ export default function HeroSlider() {
       {slides.map((slide, index) => {
         const mediaUrl = getMediaUrl(slide.image_url);
         const isActive = index === activeIndex;
-
         return (
           <div
             key={slide.id}
             className={`hero-slide ${isActive ? 'active' : ''}`}
-            style={{
-              backgroundColor: slide.background_color || '#111111',
-            }}
+            style={{ backgroundColor: slide.background_color || '#111111' }}
           >
             {slide.media_type === 'video' ? (
-              <video
-                src={mediaUrl}
-                autoPlay
-                muted
-                loop
-                playsInline
-              />
+              <video src={mediaUrl} autoPlay muted loop playsInline />
             ) : (
-              <img
-                src={mediaUrl}
-                alt="TETIM slide"
-              />
+              <img src={mediaUrl} alt={slide.title || 'TETIM slide'} />
             )}
           </div>
         );
       })}
-
       {slides.length > 1 && (
         <div className="hero-slider-dots">
           {slides.map((slide, index) => (

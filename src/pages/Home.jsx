@@ -7,8 +7,7 @@ import HeroSlider from '../components/HeroSlider.jsx';
 import ProductCard from '../components/ProductCard.jsx';
 import useSiteSettings from '../hooks/useSiteSettings.js';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
-
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const POPULAR_CATEGORIES = [
   { title: 'Спортивные костюмы', category: 'suits' },
   { title: 'Футболки', category: 'tshirts-longsleeves' },

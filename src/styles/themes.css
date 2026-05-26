@@ -1,0 +1,245 @@
+/* =========================================
+   THEMES — праздничные темы сайта
+   Управляются через useSiteSettings + body классы
+   ========================================= */
+
+/* --- Body backgrounds --- */
+
+body.theme-default {
+  background: #f6f3ee;
+}
+
+body.theme-sakha {
+  background:
+    var(--site-pattern),
+    radial-gradient(circle at top left, rgba(210, 154, 52, 0.14), transparent 34%),
+    linear-gradient(180deg, #f7f0e5 0%, #eee2d1 100%);
+  background-size: auto, auto, cover;
+}
+
+body.theme-newyear {
+  background:
+    var(--site-pattern),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 28%),
+    linear-gradient(180deg, #eef7ff 0%, #f7fbff 42%, #f3eadc 100%);
+  background-size: auto, auto, cover;
+}
+
+body.theme-defender {
+  background:
+    var(--site-pattern),
+    radial-gradient(circle at top left, rgba(30, 70, 120, 0.18), transparent 32%),
+    linear-gradient(180deg, #eef3f7 0%, #e6edf2 100%);
+}
+
+body.theme-womens {
+  background:
+    var(--site-pattern),
+    radial-gradient(circle at top left, rgba(255, 180, 210, 0.32), transparent 32%),
+    linear-gradient(180deg, #fff1f7 0%, #f9e7ee 100%);
+}
+
+body.theme-sakha-republic,
+body.theme-sakha-statehood {
+  background:
+    var(--site-pattern),
+    radial-gradient(circle at top left, rgba(210, 154, 52, 0.22), transparent 34%),
+    linear-gradient(180deg, #f8edd9 0%, #ead8bd 100%);
+}
+
+body.theme-ysyakh {
+  background:
+    var(--site-pattern),
+    radial-gradient(circle at top left, rgba(255, 210, 90, 0.34), transparent 32%),
+    linear-gradient(180deg, #fff4cf 0%, #f4e2ad 100%);
+}
+
+/* --- Header per theme --- */
+
+body.theme-newyear .site-header {
+  background: rgba(240, 248, 255, 0.96) !important;
+  border-bottom: 1px solid rgba(40, 94, 140, 0.18) !important;
+}
+
+body.theme-defender .site-header {
+  background: rgba(238, 243, 247, 0.96) !important;
+  border-bottom: 1px solid rgba(30, 70, 120, 0.2) !important;
+}
+
+body.theme-womens .site-header {
+  background: rgba(255, 241, 247, 0.96) !important;
+  border-bottom: 1px solid rgba(210, 90, 140, 0.22) !important;
+}
+
+body.theme-ysyakh .site-header {
+  background: rgba(255, 244, 207, 0.96) !important;
+  border-bottom: 1px solid rgba(210, 154, 52, 0.28) !important;
+}
+
+/* --- Buttons per theme --- */
+
+body.theme-newyear .catalog-button,
+body.theme-newyear .btn-dark,
+body.theme-newyear .cart-link,
+body.theme-newyear .header-catalog-btn,
+body.theme-newyear .header-cart-btn {
+  background: #0f2f4f !important;
+  color: #fff !important;
+}
+
+body.theme-defender .catalog-button,
+body.theme-defender .btn-dark,
+body.theme-defender .cart-link,
+body.theme-defender .header-catalog-btn,
+body.theme-defender .header-cart-btn {
+  background: #173b63 !important;
+  color: #fff !important;
+}
+
+body.theme-womens .catalog-button,
+body.theme-womens .btn-dark,
+body.theme-womens .cart-link,
+body.theme-womens .header-catalog-btn,
+body.theme-womens .header-cart-btn {
+  background: #a83b6a !important;
+  color: #fff !important;
+}
+
+body.theme-ysyakh .catalog-button,
+body.theme-ysyakh .btn-dark,
+body.theme-ysyakh .cart-link,
+body.theme-sakha-republic .catalog-button,
+body.theme-sakha-republic .btn-dark,
+body.theme-sakha-republic .cart-link,
+body.theme-sakha-statehood .catalog-button,
+body.theme-sakha-statehood .btn-dark,
+body.theme-sakha-statehood .cart-link {
+  background: #111111 !important;
+  color: #fff !important;
+}
+
+/* --- Cards per theme --- */
+
+body.theme-newyear .hero-content-card,
+body.theme-newyear .product-card,
+body.theme-newyear .card-lite {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(40, 94, 140, 0.12);
+}
+
+body.theme-womens .hero-content-card,
+body.theme-womens .product-card,
+body.theme-womens .card-lite {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(210, 90, 140, 0.12);
+}
+
+body.theme-ysyakh .hero-content-card,
+body.theme-ysyakh .product-card,
+body.theme-ysyakh .card-lite {
+  background: rgba(255, 250, 230, 0.94);
+  border: 1px solid rgba(210, 154, 52, 0.16);
+}
+
+/* --- Newyear account mini --- */
+
+body.theme-newyear .account-mini,
+body.theme-newyear .btn-light {
+  background: #dfefff !important;
+}
+
+/* --- Pills per theme --- */
+
+body.theme-newyear .pill {
+  background: #dfefff;
+  color: #0f2f4f;
+}
+
+body.theme-defender .pill {
+  background: #dbe7f3;
+  color: #173b63;
+}
+
+body.theme-womens .pill {
+  background: #ffe0ed;
+  color: #a83b6a;
+}
+
+body.theme-ysyakh .pill,
+body.theme-sakha-republic .pill,
+body.theme-sakha-statehood .pill {
+  background: rgba(210, 154, 52, 0.18);
+  color: #9b6500;
+}
+
+/* --- Footer per theme --- */
+
+body.theme-newyear .footer-mega {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 30%),
+    linear-gradient(135deg, #071a2c 0%, #0f2f4f 55%, #153d64 100%);
+}
+
+body.theme-defender .footer-mega {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 30%),
+    linear-gradient(135deg, #081d34 0%, #173b63 60%, #0f2a48 100%);
+}
+
+body.theme-womens .footer-mega {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 30%),
+    linear-gradient(135deg, #421425 0%, #a83b6a 60%, #5c1d35 100%);
+}
+
+body.theme-ysyakh .footer-mega,
+body.theme-sakha-republic .footer-mega,
+body.theme-sakha-statehood .footer-mega {
+  background:
+    radial-gradient(circle at top left, rgba(210, 154, 52, 0.22), transparent 34%),
+    linear-gradient(135deg, #111111 0%, #1d1710 48%, #3a2710 100%);
+}
+
+/* --- Snow (New Year) --- */
+
+body.theme-newyear.snow-enabled::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.95) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(255,255,255,0.8) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle, rgba(255,255,255,0.75) 0 1px, transparent 2px);
+  background-size: 120px 120px, 180px 180px, 90px 90px;
+  animation: tetimSnow 18s linear infinite;
+}
+
+@keyframes tetimSnow {
+  from { background-position: 0 -120px, 40px -180px, 20px -90px; }
+  to   { background-position: 0  120px, 40px  180px, 20px  90px; }
+}
+
+/* --- Decor image (from admin settings) --- */
+
+body::after {
+  content: "";
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 120px;
+  height: 120px;
+  background-image: var(--decor-image);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  pointer-events: none;
+  z-index: 998;
+  opacity: 0.95;
+}
+
+body[style*="--decor-image: none"]::after {
+  display: none;
+}

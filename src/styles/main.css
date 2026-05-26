@@ -10733,3 +10733,813 @@ button.danger {
     width: 100%;
   }
 }
+
+/* =========================
+   ADMIN DASHBOARD
+========================= */
+
+.adminDashboard {
+  width: 100%;
+  min-height: 100vh;
+  padding: 24px;
+  background: #ece6dc;
+  box-sizing: border-box;
+}
+
+/* =========================
+   HEADER
+========================= */
+
+.adminHeader {
+  width: 100%;
+  background: #f7f7f7;
+  border-radius: 32px;
+  padding: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 20px;
+}
+
+.adminHeader h1 {
+  font-size: 54px;
+  line-height: 1;
+  margin: 0;
+  font-weight: 900;
+  color: #000;
+}
+
+.adminHeader p {
+  margin-top: 12px;
+  color: #6f6f6f;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.refreshButton {
+  height: 72px;
+  border: none;
+  padding: 0 38px;
+  border-radius: 999px;
+  background: #000;
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.refreshButton:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+/* =========================
+   STATS
+========================= */
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 22px;
+  margin-bottom: 24px;
+}
+
+.statCard {
+  background: #f7f7f7;
+  border-radius: 28px;
+  padding: 30px;
+  min-height: 170px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.statCard span {
+  color: #6f6f6f;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.statCard h2 {
+  margin: 18px 0 0;
+  font-size: 64px;
+  font-weight: 900;
+  color: #000;
+}
+
+/* =========================
+   CONTENT
+========================= */
+
+.adminContent {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* =========================
+   LEFT PANEL
+========================= */
+
+.addProductCard {
+  background: #f7f7f7;
+  border-radius: 32px;
+  padding: 32px;
+}
+
+.addProductCard h2 {
+  margin: 0;
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.addProductCard p {
+  margin-top: 18px;
+  color: #6f6f6f;
+  font-size: 22px;
+  line-height: 1.5;
+}
+
+.uploadBox {
+  margin-top: 28px;
+  border: 2px dashed #e5d3b7;
+  border-radius: 28px;
+  padding: 28px;
+  background: #fdfaf4;
+}
+
+.uploadBox h3 {
+  margin: 0 0 18px;
+  font-size: 32px;
+  font-weight: 900;
+}
+
+.uploadBox input {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.uploadBox button {
+  margin-top: 18px;
+  width: 100%;
+  height: 62px;
+  border: none;
+  border-radius: 999px;
+  background: #000;
+  color: white;
+  font-size: 20px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* =========================
+   PRODUCTS CARD
+========================= */
+
+.productsCard {
+  background: #f7f7f7;
+  border-radius: 32px;
+  padding: 32px;
+}
+
+.productsHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 30px;
+}
+
+.productsHeader h2 {
+  margin: 0;
+  font-size: 52px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.productsHeader p {
+  margin-top: 14px;
+  color: #6f6f6f;
+  font-size: 22px;
+}
+
+.productsHeader input {
+  width: 420px;
+  height: 64px;
+  border-radius: 20px;
+  border: 1px solid #d7c4a4;
+  background: white;
+  padding: 0 22px;
+  font-size: 18px;
+  outline: none;
+}
+
+/* =========================
+   PRODUCT LIST
+========================= */
+
+.productsList {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.productRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+  border-bottom: 1px solid #e7dccb;
+  padding-bottom: 24px;
+}
+
+.productLeft {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex: 1;
+}
+
+.productLeft img {
+  width: 92px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 22px;
+  background: #ddd;
+}
+
+.productLeft h3 {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.productLeft p {
+  margin: 10px 0;
+  color: #6f6f6f;
+  font-size: 18px;
+}
+
+.sizesPreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sizesPreview span {
+  background: #f2ede3;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.productCenter {
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.productCenter strong {
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.productCenter span {
+  color: #6f6f6f;
+  font-size: 18px;
+}
+
+.productActions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editBtn,
+.deleteBtn {
+  min-width: 170px;
+  height: 58px;
+  border-radius: 999px;
+  border: none;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.editBtn {
+  background: #000;
+  color: white;
+}
+
+.deleteBtn {
+  background: #efe7da;
+  color: #c40000;
+}
+
+/* =========================
+   EMPTY
+========================= */
+
+.emptyProducts {
+  height: 240px;
+  border: 2px dashed #e7dccb;
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8f8f8f;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+/* =========================
+   MODAL
+========================= */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 999;
+  overflow-y: auto;
+  padding: 40px;
+}
+
+.editModal {
+  width: 100%;
+  max-width: 1200px;
+  margin: auto;
+  background: #f7f7f7;
+  border-radius: 34px;
+  padding: 34px;
+}
+
+.modalTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalTop h2 {
+  margin: 0;
+  font-size: 42px;
+  font-weight: 900;
+}
+
+.modalTop button {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: #000;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.editGrid {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 36px;
+}
+
+.previewImage {
+  width: 100%;
+  border-radius: 30px;
+  object-fit: cover;
+  background: #ddd;
+}
+
+.editRight {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.editRight input,
+.editRight textarea {
+  width: 100%;
+  border: 1px solid #d8c5a4;
+  border-radius: 20px;
+  padding: 18px;
+  font-size: 18px;
+  background: white;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.editRight textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.sizesEditor {
+  margin-top: 10px;
+}
+
+.sizesEditor h3 {
+  margin-bottom: 18px;
+  font-size: 28px;
+}
+
+.sizesGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.sizeInput {
+  border: 1px solid #dcc8a6;
+  border-radius: 24px;
+  padding: 18px;
+  background: #faf6ef;
+}
+
+.sizeInput span {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 900;
+  font-size: 20px;
+}
+
+.sizeInput input {
+  margin: 0;
+}
+
+.modalButtons {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.saveBtn,
+.cancelBtn {
+  flex: 1;
+  height: 68px;
+  border-radius: 999px;
+  border: none;
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.saveBtn {
+  background: #000;
+  color: white;
+}
+
+.cancelBtn {
+  background: #e8dfd1;
+  color: #000;
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 1200px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .adminContent {
+    grid-template-columns: 1fr;
+  }
+
+  .productsHeader {
+    flex-direction: column;
+  }
+
+  .productsHeader input {
+    width: 100%;
+  }
+
+  .editGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .adminDashboard {
+    padding: 14px;
+  }
+
+  .adminHeader {
+    padding: 24px;
+    border-radius: 24px;
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .adminHeader h1 {
+    font-size: 36px;
+  }
+
+  .adminHeader p {
+    font-size: 18px;
+  }
+
+  .refreshButton {
+    width: 100%;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .statCard {
+    min-height: auto;
+    padding: 24px;
+  }
+
+  .statCard h2 {
+    font-size: 46px;
+  }
+
+  .productsHeader h2 {
+    font-size: 38px;
+  }
+
+  .productRow {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .productCenter {
+    width: 100%;
+  }
+
+  .productActions {
+    width: 100%;
+  }
+
+  .editBtn,
+  .deleteBtn {
+    width: 100%;
+  }
+
+  .sizesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .modalOverlay {
+    padding: 10px;
+  }
+
+  .editModal {
+    padding: 20px;
+    border-radius: 24px;
+  }
+}
+
+.admin-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.admin-modal-content {
+  background: #fff;
+  border-radius: 32px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+
+.admin-modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #f0f0f0;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-modal-close:hover {
+  background: #e0e0e0;
+}
+
+.admin-product-edit-form {
+  width: 100%;
+}
+
+/* =========================
+   FIX: размеры и остатки (не выходят за линию)
+========================= */
+.product-size-list {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  margin-top: 8px;
+}
+
+.product-size-list button {
+  flex: 0 0 auto !important;
+  min-width: 58px !important;
+  max-width: 100% !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Для мобильных устройств – ещё меньше кнопки */
+@media (max-width: 700px) {
+  .product-size-list button {
+    min-width: 48px !important;
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* Для очень узких экранов (420px) – две колонки или перенос */
+@media (max-width: 480px) {
+  .product-size-list {
+    gap: 5px !important;
+  }
+  .product-size-list button {
+    min-width: 44px !important;
+    padding: 4px 6px !important;
+    font-size: 10px !important;
+  }
+}
+
+/* Фикс для сетки размеров в админ-панели */
+.admin-size-stock-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(80px, 1fr));
+    gap: 12px;
+}
+
+@media (max-width: 1200px) {
+    .admin-size-stock-grid {
+        grid-template-columns: repeat(3, minmax(70px, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .admin-size-stock-grid {
+        grid-template-columns: repeat(2, minmax(60px, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .admin-size-stock-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .admin-size-stock-grid label {
+        min-width: 0;
+        padding: 8px;
+    }
+    .admin-size-stock-grid input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
+
+/* Горизонтальная прокрутка для остатков по размерам в админке */
+.admin-size-stock-picker {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 10px;
+}
+
+.admin-size-stock-grid {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 12px;
+    padding-bottom: 8px; /* пространство под скроллбар */
+}
+
+.admin-size-stock-grid label {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #dfd0bd;
+    border-radius: 18px;
+    background: #fffaf2;
+    min-width: 80px;
+}
+
+.admin-size-stock-grid input {
+    width: 80px;
+    text-align: center;
+    padding: 8px;
+    border-radius: 12px;
+    border: 1px solid #dfd0bd;
+}
+
+/* Адаптация под маленькие экраны */
+@media (max-width: 768px) {
+    .admin-size-stock-grid label {
+        min-width: 70px;
+        padding: 8px;
+    }
+    .admin-size-stock-grid input {
+        width: 65px;
+    }
+}
+
+/* =========================
+   ГОРИЗОНТАЛЬНАЯ ПРОКРУТКА ДЛЯ РАЗМЕРОВ В АДМИНКЕ
+========================= */
+.admin-size-stock-picker {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 10px;
+}
+
+.admin-size-stock-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    padding-bottom: 8px;
+    min-width: min-content;
+}
+
+.admin-size-stock-grid label {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #dfd0bd;
+    border-radius: 18px;
+    background: #fffaf2;
+    min-width: 80px;
+}
+
+.admin-size-stock-grid input {
+    width: 80px;
+    text-align: center;
+    padding: 8px;
+    border-radius: 12px;
+    border: 1px solid #dfd0bd;
+}
+
+/* Адаптация под маленькие экраны */
+@media (max-width: 768px) {
+    .admin-size-stock-grid label {
+        min-width: 70px;
+        padding: 8px;
+    }
+    .admin-size-stock-grid input {
+        width: 65px;
+    }
+}
+
+/* Увеличение полей ввода для размеров */
+.admin-size-stock-grid label {
+    min-width: 95px;   /* было 80px – увеличили */
+    padding: 12px 14px;
+}
+
+.admin-size-stock-grid input {
+    width: 90px;       /* было 80px – увеличили */
+    font-size: 15px;
+    padding: 10px;
+}
+
+/* Для экранов поменьше – чуть меньше, но всё равно шире */
+@media (max-width: 768px) {
+    .admin-size-stock-grid label {
+        min-width: 85px;
+        padding: 10px;
+    }
+    .admin-size-stock-grid input {
+        width: 80px;
+    }
+}

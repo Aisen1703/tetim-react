@@ -1,0 +1,418 @@
+/* =========================================
+   ACCOUNT — личный кабинет
+   AUTH — модальное окно входа/регистрации
+   ========================================= */
+
+/* ===================
+   AUTH MODAL
+   =================== */
+
+.auth-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.58);
+  backdrop-filter: blur(6px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.auth-modal {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: #f6f3ee;
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 28px 90px rgba(0,0,0,0.28);
+}
+
+.auth-modal h2 {
+  margin: 0 0 12px;
+  font-size: 2.2rem;
+  line-height: 1.05;
+  font-weight: 900;
+}
+
+.auth-modal p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.auth-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 50%;
+  background: #e8dfd2;
+  color: #111;
+  font-size: 22px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-form input {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid #d8cec0;
+  border-radius: 14px;
+  background: #fffdf9;
+  padding: 0 16px;
+  outline: none;
+}
+
+.auth-form input:focus {
+  border-color: #111;
+}
+
+.auth-form button[type="submit"] {
+  width: 100%;
+  min-height: 54px;
+  border: none;
+  border-radius: 14px;
+  background: #111;
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.auth-link-btn {
+  border: none;
+  background: transparent;
+  color: var(--accent-dark);
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 6px 0;
+  font-size: 0.95rem;
+}
+
+.auth-message {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #e8f5ea;
+}
+
+.auth-message.error {
+  background: #fde8e8;
+}
+
+.auth-dev-code {
+  padding: 12px 14px;
+  background: var(--surface-soft);
+  border-radius: 12px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* Password reset — method selector */
+.reset-methods {
+  display: flex;
+  gap: 12px;
+}
+
+.reset-method {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffdf9;
+  cursor: pointer;
+}
+
+.reset-method.active {
+  border-color: #111;
+  background: #f0ede7;
+  font-weight: 900;
+}
+
+.reset-method input[type="radio"] {
+  width: auto;
+  min-height: auto;
+}
+
+/* Switcher (legacy tabs) */
+.auth-switcher {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.auth-switcher-btn {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #eee9e1;
+  color: #111;
+  font-weight: 900;
+}
+
+.auth-switcher-btn.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+/* ===================
+   ACCOUNT PAGE
+   =================== */
+
+.account-page {
+  padding: 34px 0 48px;
+  min-height: 60vh;
+}
+
+.account-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.account-title-row h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.account-title-row p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.account-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.account-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 42px;
+  align-items: start;
+}
+
+/* Sidebar */
+.account-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+}
+
+.account-menu-link {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 11px 0;
+  font-size: 1rem;
+  color: #1f4ed8;
+  cursor: pointer;
+}
+
+.account-menu-link.active {
+  color: #111;
+  font-weight: 900;
+}
+
+/* Content area */
+.account-content {
+  min-width: 0;
+  padding: 30px;
+}
+
+.account-panel {
+  display: none;
+}
+
+.account-panel.active {
+  display: block;
+}
+
+.account-panel h2 {
+  margin: 0 0 30px;
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.account-section {
+  margin-bottom: 34px;
+}
+
+.account-section h3 {
+  margin: 0 0 18px;
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.account-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 28px;
+}
+
+.account-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-field span {
+  color: #8b8172;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.account-field input {
+  width: 100%;
+  min-height: 54px;
+  padding: 14px 16px;
+  border: 1px solid #ddd4c7;
+  border-radius: 14px;
+  background: #fffdf9;
+  outline: none;
+}
+
+.radio-group {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  min-height: 54px;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.radio-group input {
+  width: auto;
+  min-height: auto;
+}
+
+.account-actions {
+  margin-top: 8px;
+}
+
+/* Orders tab */
+.order-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.order-row-title {
+  font-size: 1.05rem;
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.order-row-meta {
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.order-row-price {
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 1000px) {
+  .account-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .account-sidebar {
+    overflow-x: auto;
+    flex-direction: row;
+    padding-bottom: 12px;
+  }
+
+  .account-menu-link {
+    white-space: nowrap;
+  }
+
+  .account-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 700px) {
+  .auth-modal {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 16px auto !important;
+    padding: 24px !important;
+    border-radius: 24px !important;
+  }
+
+  .auth-modal h2 { font-size: 30px !important; }
+
+  .auth-form input,
+  .auth-form button {
+    min-height: 50px !important;
+  }
+
+  .auth-backdrop {
+    padding: 12px !important;
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+  }
+
+  .account-layout {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+  }
+
+  .account-sidebar {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    gap: 10px !important;
+    padding: 14px !important;
+    scrollbar-width: none !important;
+  }
+
+  .account-sidebar::-webkit-scrollbar { display: none !important; }
+
+  .account-menu-link {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+  }
+
+  .account-content {
+    padding: 22px !important;
+    border-radius: 24px !important;
+  }
+
+  .account-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

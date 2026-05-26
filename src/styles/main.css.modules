@@ -1,0 +1,34 @@
+/* ============================================================
+   TETIM – главный файл стилей (импорт всех модулей)
+   ============================================================ */
+
+/* Базовые стили */
+@import './base/variables.css';
+@import './base/reset.css';
+@import './base/global.css';
+@import './base/utilities.css';
+
+/* Компоненты */
+@import './components/header.css';
+@import './components/footer.css';
+@import './components/hero-slider.css';
+@import './components/product-card.css';
+@import './components/auth-modal.css';
+
+/* Страницы */
+@import './pages/home.css';
+@import './pages/catalog.css';
+@import './pages/product.css';
+@import './pages/cart.css';
+@import './pages/account.css';
+@import './pages/custom-order.css';
+@import './pages/admin.css';
+
+/* Тематические стили (подключаются все, но активная тема определяется классом на body) */
+@import './themes/sakha.css';
+@import './themes/newyear.css';
+@import './themes/defender.css';
+@import './themes/womens.css';
+@import './themes/ysyakh.css';
+@import './themes/republic.css';
+@import './themes/statehood.css';

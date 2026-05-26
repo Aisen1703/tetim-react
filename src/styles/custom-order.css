@@ -1,0 +1,264 @@
+/* =========================================
+   CUSTOM ORDER — индивидуальный заказ
+   ========================================= */
+
+.custom-order-page {
+  padding: 34px 0 48px;
+  min-height: 60vh;
+}
+
+/* --- Hero section --- */
+
+.custom-hero {
+  display: grid;
+  grid-template-columns: 1.35fr 0.9fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.custom-hero-content, .custom-hero-card,
+.custom-calculator, .custom-order-side-box {
+  padding: 30px;
+}
+
+.custom-hero-content h1 {
+  margin: 0 0 14px;
+  font-size: clamp(2.1rem, 3vw, 3.2rem);
+  line-height: 1.02;
+  font-weight: 900;
+}
+
+.custom-hero-content p, .custom-hero-card p,
+.calc-note, .custom-order-side p {
+  color: var(--muted);
+}
+
+.custom-hero-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.feature-pill {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  font-weight: 900;
+  font-size: 0.92rem;
+}
+
+/* --- Rules section --- */
+
+.custom-order-rules-section {
+  margin-bottom: 28px;
+}
+
+.custom-order-rules-card {
+  display: grid;
+  grid-template-columns: 0.95fr 1.1fr;
+  overflow: hidden;
+}
+
+.custom-order-rules-image {
+  background: #111;
+  min-height: 520px;
+}
+
+.custom-order-rules-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.custom-order-rules-content {
+  padding: 34px;
+}
+
+.custom-order-rules-content h2 {
+  margin: 0 0 22px;
+  font-size: 1.7rem;
+  font-weight: 900;
+}
+
+.custom-order-rules-list {
+  display: grid;
+}
+
+.custom-order-rule {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.custom-order-rule span {
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
+.custom-order-rule p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.custom-order-rules-final {
+  margin-top: 18px;
+  font-weight: 900;
+}
+
+/* --- Calculator --- */
+
+.custom-calc-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr 0.7fr auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.custom-calc-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.custom-calc-grid label span {
+  font-weight: 900;
+}
+
+.custom-calc-grid select, .custom-calc-grid input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffdf9;
+  padding: 0 14px;
+}
+
+.calc-result {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.calc-result div {
+  background: #fffdf9;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.calc-result span {
+  display: block;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.calc-note {
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+/* --- Order list --- */
+
+.order-list-box {
+  margin-top: 24px;
+}
+
+.selected-order-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.selected-order-item p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.selected-order-item-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.selected-order-item-right button {
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  font-weight: 900;
+}
+
+.order-total-row {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--surface-soft);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.order-total-row strong {
+  font-size: 1.7rem;
+}
+
+/* --- Order form layout --- */
+
+.custom-order-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 0.85fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.custom-order-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.custom-order-form input,
+.custom-order-form textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fffdf9;
+  outline: none;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 1100px) {
+  .custom-hero, .custom-order-rules-card,
+  .custom-calc-grid, .custom-order-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-order-rules-image {
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 700px) {
+  .custom-hero-content,
+  .custom-order-rules-content,
+  .custom-calculator {
+    padding: 24px;
+  }
+
+  .calc-result {
+    grid-template-columns: 1fr;
+  }
+
+  .selected-order-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

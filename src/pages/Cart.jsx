@@ -11,7 +11,7 @@ import {
   updateCartItemQuantity,
 } from '../utils/cartStorage.js';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function formatPrice(value) {
   return `${Number(value || 0).toLocaleString('ru-RU')} ₽`;

@@ -1,0 +1,313 @@
+/* =========================================
+   HEADER — шапка сайта
+   ========================================= */
+
+.site-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1000 !important;
+  background: #f4f0e8 !important;
+  border-bottom: 1px solid #ded2c1 !important;
+  backdrop-filter: blur(14px) !important;
+  overflow: visible !important;
+}
+
+.site-header::after {
+  content: "" !important;
+  display: block !important;
+  height: 10px !important;
+  background:
+    linear-gradient(90deg, transparent 0 12px, #b9b2a8 12px 24px, transparent 24px 36px) 0 0 / 72px 10px repeat-x,
+    linear-gradient(90deg, transparent 0 8px, #f1dca9 8px 20px, transparent 20px 36px) 36px 0 / 72px 10px repeat-x !important;
+}
+
+.header-inner {
+  height: 82px !important;
+  display: grid !important;
+  grid-template-columns: 220px auto minmax(280px, 1fr) auto auto !important;
+  align-items: center !important;
+  gap: 18px !important;
+}
+
+.header-logo {
+  width: 220px !important;
+  height: 64px !important;
+  display: flex !important;
+  align-items: center !important;
+  overflow: hidden !important;
+  text-decoration: none !important;
+}
+
+.header-logo img {
+  width: 190px !important;
+  max-width: 190px !important;
+  height: auto !important;
+  max-height: 58px !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
+.header-catalog-btn,
+.header-cart-btn,
+.header-login-btn {
+  height: 56px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #111111 !important;
+  color: #ffffff !important;
+  padding: 0 28px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+}
+
+.header-search {
+  min-width: 0 !important;
+}
+
+.header-search input {
+  width: 100% !important;
+  height: 56px !important;
+  border: 1px solid #d6c5ae !important;
+  border-radius: 999px !important;
+  background: #fffaf2 !important;
+  color: #111111 !important;
+  padding: 0 24px !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  outline: none !important;
+}
+
+.header-account {
+  min-width: 138px !important;
+  height: 56px !important;
+  border-radius: 999px !important;
+  background: #eee3d2 !important;
+  color: #111111 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 0 18px !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+}
+
+.header-account-icon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% !important;
+  background: #111111 !important;
+  color: #ffffff !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.header-account small {
+  display: block !important;
+  color: #7c7165 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+}
+
+.header-account strong {
+  display: block !important;
+  color: #111111 !important;
+  font-size: 17px !important;
+  font-weight: 900 !important;
+  line-height: 1.1 !important;
+}
+
+.header-cart-btn {
+  min-width: 138px !important;
+}
+
+.header-icons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Ornament stripe */
+.header-ornament {
+  width: 100%;
+  line-height: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.header-ornament img {
+  display: block;
+  width: 100%;
+  height: 18px;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.95;
+}
+
+/* Legacy classes (used in some CSS variants) */
+.top-line {
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  font-size: 0.9rem;
+}
+
+.top-line-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 40px;
+}
+
+.top-line-left, .top-line-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--muted);
+}
+
+.category-nav {
+  border-top: 1px solid rgba(0,0,0,0.03);
+}
+
+.category-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 50px;
+  justify-content: flex-start;
+  gap: 26px;
+}
+
+.category-nav-inner a {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* --- Responsive --- */
+
+@media (max-width: 900px) {
+  .header-inner {
+    height: auto !important;
+    grid-template-columns: 1fr !important;
+    padding: 14px 0 !important;
+  }
+
+  .header-logo {
+    width: 180px !important;
+    height: auto !important;
+  }
+
+  .header-logo img {
+    width: 170px !important;
+    max-width: 170px !important;
+    max-height: 52px !important;
+  }
+
+  .header-catalog-btn,
+  .header-cart-btn,
+  .header-login-btn,
+  .header-account,
+  .header-search input {
+    width: 100% !important;
+  }
+
+  .header-ornament img {
+    height: 14px;
+  }
+}
+
+@media (max-width: 700px) {
+  .site-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
+  }
+
+  .header-inner {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    padding: 10px 0 !important;
+    height: auto !important;
+  }
+
+  .header-logo {
+    width: 170px !important;
+    height: auto !important;
+    justify-self: start !important;
+  }
+
+  .header-logo img {
+    width: 165px !important;
+    max-width: 165px !important;
+    max-height: 52px !important;
+  }
+
+  .header-catalog-btn {
+    display: flex !important;
+    width: 100% !important;
+    height: 50px !important;
+    min-height: 50px !important;
+    font-size: 16px !important;
+  }
+
+  .header-search {
+    width: 100% !important;
+  }
+
+  .header-search input {
+    width: 100% !important;
+    height: 50px !important;
+    min-height: 50px !important;
+    border-radius: 999px !important;
+    font-size: 15px !important;
+    padding: 0 18px !important;
+  }
+
+  .header-icons {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+
+  .header-account,
+  .header-cart-btn,
+  .header-login-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    height: 50px !important;
+    padding: 0 12px !important;
+    font-size: 14px !important;
+    justify-content: center !important;
+  }
+
+  .header-account small {
+    font-size: 11px !important;
+  }
+
+  .header-ornament,
+  .header-ornament img {
+    height: 10px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .header-logo img {
+    width: 150px !important;
+    max-width: 150px !important;
+  }
+
+  .header-icons {
+    grid-template-columns: 1fr !important;
+  }
+}
