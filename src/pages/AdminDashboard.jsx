@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 
 // ─── ИСПРАВЛЕНИЕ 1: API_URL берётся из env корректно
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import SiteBuilder from './SiteBuilder.jsx';
+import '../styles/SiteBuilder.css';
 
 const categories = [
   { value: 'accessories', label: 'Аксессуары' },
