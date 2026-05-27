@@ -262,32 +262,23 @@ export default function ProductCard({ product }) {
                 const isAvailable = stock > 0;
                 const isSelected = selectedSize === size;
 
+                if (!isAvailable) return null;
+
                 return (
                   <button
                     key={size}
                     type="button"
-                    className={`size-btn ${isSelected ? 'active' : ''} ${!isAvailable ? 'disabled' : ''}`}
-                    disabled={!isAvailable}
-                    title={isAvailable ? `Остаток: ${stock}` : 'Нет в наличии'}
+                    className={`size-btn ${isSelected ? 'active' : ''}`}
+                    title={`Остаток: ${stock}`}
                     aria-pressed={isSelected}
-                    aria-disabled={!isAvailable}
                     onClick={(e) => handleSizeSelect(size, e)}
                   >
-                    <span className="size-label">{size}</span>
-                    <small className="size-stock">{stock}</small>
+                    {size}
                   </button>
                 );
               })}
             </div>
           </div>
-
-          {/* Остатки */}
-          <p className="product-stock">
-            Остаток размера <strong>{selectedSize}</strong>: {selectedSizeStock}
-          </p>
-          <p className="product-stock total">
-            Всего: <strong>{totalStock}</strong>
-          </p>
         </div>
       </Link>
 
@@ -300,30 +291,36 @@ export default function ProductCard({ product }) {
             Нет в наличии
           </button>
         ) : quantity > 0 ? (
-          <div className="product-card-quantity" role="group" aria-label="Количество">
-            <button
-              type="button"
-              className="quantity-btn decrease"
-              onClick={handleDecrease}
-              aria-label="Уменьшить количество"
-            >
-              −
-            </button>
+          <div className="product-card-quantity-wrap">
+            <div className="product-card-quantity" role="group" aria-label="Количество">
+              <button
+                type="button"
+                className="quantity-btn decrease"
+                onClick={handleDecrease}
+                aria-label="Уменьшить количество"
+              >
+                −
+              </button>
 
-            <span className="quantity-value" aria-live="polite">
-              {quantity}
-            </span>
+              <span className="quantity-value" aria-live="polite">
+                {quantity}
+              </span>
 
-            <button
-              type="button"
-              className="quantity-btn increase"
-              onClick={handleIncrease}
-              disabled={quantity >= selectedSizeStock}
-              aria-label="Увеличить количество"
-              aria-disabled={quantity >= selectedSizeStock}
-            >
-              +
-            </button>
+              <button
+                type="button"
+                className="quantity-btn increase"
+                onClick={handleIncrease}
+                disabled={quantity >= selectedSizeStock}
+                title={quantity >= selectedSizeStock ? `Максимум: ${selectedSizeStock} шт.` : ''}
+              >
+                +
+              </button>
+            </div>
+            {quantity >= selectedSizeStock && (
+              <span className="product-stock-limit">
+                Максимум {selectedSizeStock} шт.
+              </span>
+            )}
           </div>
         ) : (
           <button
