@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import AuthModal from './AuthModal.jsx';
 import useSiteSettings from '../hooks/useSiteSettings.js';
@@ -8,9 +8,11 @@ import { getCartCount } from '../utils/cartStorage.js';
 export default function Header() {
   const settings = useSiteSettings();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [cartCount, setCartCount] = useState(() => getCartCount());
   const [authOpen, setAuthOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('user') || 'null');
@@ -18,6 +20,12 @@ export default function Header() {
       return null;
     }
   });
+
+  // Синхронизируем поле поиска с URL
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setSearchText(params.get('q') || '');
+  }, [location.search]);
 
   useEffect(() => {
     function updateCartCount() {
@@ -36,6 +44,20 @@ export default function Header() {
 
   function handleLogin(nextUser) {
     setUser(nextUser);
+  }
+
+  function handleSearch(e) {
+    e.preventDefault();
+    const q = searchText.trim();
+    if (q) {
+      navigate(`/catalog?q=${encodeURIComponent(q)}`);
+    } else {
+      navigate('/catalog');
+    }
+  }
+
+  function handleSearchKeyDown(e) {
+    if (e.key === 'Enter') handleSearch(e);
   }
 
   const isActive = (path) => location.pathname === path;
@@ -57,7 +79,12 @@ export default function Header() {
           </Link>
 
           <div className="header-search">
-            <input placeholder="Поиск по товарам" />
+            <input
+              placeholder="Поиск по товарам"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+            />
           </div>
 
           {user ? (
@@ -92,7 +119,12 @@ export default function Header() {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
-          <input placeholder="Поиск по товарам" />
+          <input
+            placeholder="Поиск по товарам"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+          />
         </div>
       </header>
 

@@ -35,7 +35,27 @@ function getCategoryLabel(category) {
   return CATEGORY_LABELS[category] || category || 'Каталог';
 }
 
+function getImageUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${API_URL}${url}`;
+  return url;
+}
+
+const PLACEHOLDER = 'https://placehold.co/800x1000?text=TETIM';
+
 function normalizeProduct(product) {
+  // Собираем все фото: image_url + images (доп. фото через запятую), макс 5
+  const mainUrl = getImageUrl(product.image_url || product.image || '');
+  const extraUrls = String(product.images || '')
+    .split(',')
+    .map((u) => getImageUrl(u.trim()))
+    .filter(Boolean);
+
+  const allImages = mainUrl
+    ? [mainUrl, ...extraUrls].slice(0, 5)
+    : extraUrls.slice(0, 5);
+
   return {
     id: Number(product.id),
     external_id: product.external_id || '',
@@ -45,7 +65,8 @@ function normalizeProduct(product) {
     price: Number(product.price || 0),
     sizes: product.sizes || '',
     stock: Number(product.stock || 0),
-    image: product.image_url || product.image || 'https://placehold.co/800x1000?text=TETIM',
+    image: allImages[0] || PLACEHOLDER,
+    images: allImages.length > 0 ? allImages : [PLACEHOLDER],
     description: product.description || 'Описание товара пока не добавлено.',
   };
 }
@@ -88,6 +109,7 @@ export default function Product() {
   });
   const [products, setProducts] = useState([]);
   const [selectedSize, setSelectedSize] = useState('');
+  const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [stockMessage, setStockMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -148,6 +170,7 @@ export default function Product() {
       setSelectedSize(firstAvailable?.size || sizeItems[0]?.size || '');
       setQuantity(1);
     }
+    setSelectedImage(0);
   }, [product?.id]);
 
   // ─── Остаток для выбранного размера
@@ -307,8 +330,26 @@ export default function Product() {
             <section className="product-detail-layout">
               <div className="product-detail-gallery">
                 <div className="product-main-image-wrap">
-                  <img className="product-main-image" src={product.image} alt={product.name} />
+                  <img
+                    className="product-main-image"
+                    src={product.images[selectedImage] || product.image}
+                    alt={product.name}
+                  />
                 </div>
+
+                {product.images.length > 1 && (
+                  <div className="product-gallery-thumbs">
+                    {product.images.map((img, i) => (
+                      <div
+                        key={i}
+                        className={`product-gallery-thumb${selectedImage === i ? ' active' : ''}`}
+                        onClick={() => setSelectedImage(i)}
+                      >
+                        <img src={img} alt={`${product.name} ${i + 1}`} />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="product-detail-info">

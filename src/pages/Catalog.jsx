@@ -7,181 +7,113 @@ import ProductCard from '../components/ProductCard.jsx';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-const categories = [
+const DEFAULT_CATS = [
   { value: 'all', label: 'Все товары' },
-  { value: 'accessories', label: 'Аксессуары' },
-  { value: 'sale', label: 'Акционные товары' },
-  { value: 'pants-shorts', label: 'Брюки и Шорты' },
-  { value: 'headwear', label: 'Головные уборы' },
-  { value: 'sweatshirts', label: 'Джемпера, свитшоты, толстовки' },
-  { value: 'vests', label: 'Жилеты' },
-  { value: 'suits', label: 'Костюмы, комплекты' },
-  { value: 'jackets', label: 'Пуховики, куртки, ветровки' },
-  { value: 'shirts', label: 'Рубашки' },
-  { value: 'tshirts-longsleeves', label: 'Футболки и Лонгсливы' },
-  { value: 'bags', label: 'Сумки' },
-  { value: 'backpacks', label: 'Рюкзаки' },
-  { value: 'caps', label: 'Кепки' },
-  { value: 'hats', label: 'Шапки' },
-  { value: 'socks', label: 'Носки' },
-  { value: 'belts', label: 'Ремни' },
 ];
 
-async function safeJson(response) {
+function getCatsFromStorage() {
   try {
-    return await response.json();
-  } catch {
-    return {};
-  }
+    const stored = JSON.parse(localStorage.getItem('tetim_cats') || 'null');
+    if (stored && stored.length > 0) {
+      return [{ value: 'all', label: 'Все товары' }, ...stored];
+    }
+  } catch {}
+  return DEFAULT_CATS;
 }
 
-function getCategoryLabel(categoryValue) {
-  return (
-    categories.find((category) => category.value === categoryValue)?.label ||
-    categoryValue ||
-    'Категория'
-  );
-}
-
-function normalizeProduct(product) {
-  return {
-    ...product,
-    category_label: getCategoryLabel(product.category),
-  };
-}
+async function safeJson(r) { try { return await r.json(); } catch { return {}; } }
 
 export default function Catalog() {
   const [searchParams, setSearchParams] = useSearchParams();
-
   const categoryFromUrl = searchParams.get('category') || 'all';
   const searchFromUrl = searchParams.get('q') || '';
 
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState(getCatsFromStorage);
   const [activeCategory, setActiveCategory] = useState(categoryFromUrl);
   const [searchText, setSearchText] = useState(searchFromUrl);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
+  // Обновляем категории если администратор их изменил
   useEffect(() => {
-    loadProducts();
+    function syncCats() { setCategories(getCatsFromStorage()); }
+    window.addEventListener('storage', syncCats);
+    return () => window.removeEventListener('storage', syncCats);
   }, []);
 
-  useEffect(() => {
-    setActiveCategory(categoryFromUrl);
-    setSearchText(searchFromUrl);
-  }, [categoryFromUrl, searchFromUrl]);
+  useEffect(() => { loadProducts(); }, []);
+  useEffect(() => { setActiveCategory(categoryFromUrl); setSearchText(searchFromUrl); }, [categoryFromUrl, searchFromUrl]);
 
   async function loadProducts() {
-    setLoading(true);
-    setMessage('');
-
+    setLoading(true); setMessage('');
     try {
       const response = await fetch(`${API_URL}/public/products`);
       const data = await safeJson(response);
-
-      if (!response.ok) {
-        setMessage(data.message || 'Не удалось загрузить товары');
-        setProducts([]);
-        return;
-      }
-
-      const normalizedProducts = (data.products || []).map(normalizeProduct);
-
-      setProducts(normalizedProducts);
+      if (!response.ok) { setMessage(data.message || 'Не удалось загрузить товары'); setProducts([]); return; }
+      setProducts(data.products || []);
     } catch {
-      setMessage('Backend не отвечает. Проверьте server.js');
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
+      setMessage('Backend не отвечает'); setProducts([]);
+    } finally { setLoading(false); }
   }
 
-  function changeCategory(categoryValue) {
-    setActiveCategory(categoryValue);
+  function getCategoryLabel(value) {
+    return categories.find(c => c.value === value)?.label || value || 'Категория';
+  }
 
-    const nextParams = {};
-
-    if (categoryValue !== 'all') {
-      nextParams.category = categoryValue;
-    }
-
-    if (searchText.trim()) {
-      nextParams.q = searchText.trim();
-    }
-
-    setSearchParams(nextParams);
+  function changeCategory(value) {
+    setActiveCategory(value);
+    const p = {};
+    if (value !== 'all') p.category = value;
+    if (searchText.trim()) p.q = searchText.trim();
+    setSearchParams(p);
   }
 
   function changeSearch(value) {
     setSearchText(value);
-
-    const nextParams = {};
-
-    if (activeCategory !== 'all') {
-      nextParams.category = activeCategory;
-    }
-
-    if (value.trim()) {
-      nextParams.q = value.trim();
-    }
-
-    setSearchParams(nextParams);
+    const p = {};
+    if (activeCategory !== 'all') p.category = activeCategory;
+    if (value.trim()) p.q = value.trim();
+    setSearchParams(p);
   }
 
   const filteredProducts = useMemo(() => {
-    const search = searchText.trim().toLowerCase();
-
-    return products.filter((product) => {
-      const matchesCategory =
-        activeCategory === 'all' || product.category === activeCategory;
-
-      const matchesSearch =
-        !search ||
-        String(product.name || '').toLowerCase().includes(search) ||
-        String(product.article || '').toLowerCase().includes(search) ||
-        String(product.external_id || '').toLowerCase().includes(search) ||
-        String(product.category_label || '').toLowerCase().includes(search) ||
-        String(product.description || '').toLowerCase().includes(search);
-
-      return matchesCategory && matchesSearch;
+    const q = searchText.trim().toLowerCase();
+    return products.filter(product => {
+      const matchCat = activeCategory === 'all' || product.category === activeCategory;
+      const matchSearch = !q ||
+        String(product.name || '').toLowerCase().includes(q) ||
+        String(product.article || '').toLowerCase().includes(q) ||
+        String(product.external_id || '').toLowerCase().includes(q) ||
+        String(product.description || '').toLowerCase().includes(q);
+      return matchCat && matchSearch;
     });
   }, [products, activeCategory, searchText]);
 
   return (
     <>
       <Header />
-
       <main className="catalog-page">
         <section className="container catalog-head">
           <h1>Каталог</h1>
           <p>Все опубликованные товары TETIM</p>
-
           <div className="catalog-search">
-            <input
-              value={searchText}
-              onChange={(event) => changeSearch(event.target.value)}
-              placeholder="Поиск по товарам"
-            />
+            <input value={searchText} onChange={e => changeSearch(e.target.value)} placeholder="Поиск по товарам" />
           </div>
         </section>
 
         <section className="container catalog-layout">
           <aside className="catalog-sidebar">
             <h2>Категории</h2>
-
             <div className="catalog-category-list">
-              {categories.map((category) => (
+              {categories.map(cat => (
                 <button
-                  key={category.value}
+                  key={cat.value}
                   type="button"
-                  className={
-                    activeCategory === category.value
-                      ? 'catalog-category active'
-                      : 'catalog-category'
-                  }
-                  onClick={() => changeCategory(category.value)}
+                  className={activeCategory === cat.value ? 'catalog-category active' : 'catalog-category'}
+                  onClick={() => changeCategory(cat.value)}
                 >
-                  {category.label}
+                  {cat.label}
                 </button>
               ))}
             </div>
@@ -190,40 +122,24 @@ export default function Catalog() {
           <section className="catalog-products-area">
             <div className="catalog-products-top">
               <div>
-                <strong>
-                  {activeCategory === 'all'
-                    ? 'Все товары'
-                    : getCategoryLabel(activeCategory)}
-                </strong>
-
-                <span>
-                  Найдено: {filteredProducts.length}
-                </span>
+                <strong>{activeCategory === 'all' ? 'Все товары' : getCategoryLabel(activeCategory)}</strong>
+                <span>Найдено: {filteredProducts.length}</span>
               </div>
-
-              <button type="button" onClick={loadProducts}>
-                Обновить
-              </button>
+              <button type="button" onClick={loadProducts}>Обновить</button>
             </div>
 
             {loading ? (
-              <div className="catalog-state">
-                Загрузка товаров...
-              </div>
+              <div className="catalog-state">Загрузка товаров...</div>
             ) : message ? (
-              <div className="catalog-state error">
-                {message}
-              </div>
+              <div className="catalog-state error">{message}</div>
             ) : filteredProducts.length === 0 ? (
               <div className="catalog-state">
                 <h2>Товары не найдены</h2>
-                <p>
-                  Проверьте категорию, поиск или публикацию товара в админке.
-                </p>
+                <p>Проверьте категорию, поиск или публикацию товара в админке.</p>
               </div>
             ) : (
               <div className="products-grid">
-                {filteredProducts.map((product) => (
+                {filteredProducts.map(product => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
@@ -231,7 +147,6 @@ export default function Catalog() {
           </section>
         </section>
       </main>
-
       <Footer />
     </>
   );

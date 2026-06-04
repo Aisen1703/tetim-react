@@ -1,176 +1,6 @@
 /* =========================================
    ACCOUNT — личный кабинет
-   AUTH — модальное окно входа/регистрации
    ========================================= */
-
-/* ===================
-   AUTH MODAL
-   =================== */
-
-.auth-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.58);
-  backdrop-filter: blur(6px);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.auth-modal {
-  position: relative;
-  width: 100%;
-  max-width: 520px;
-  background: #f6f3ee;
-  border-radius: 24px;
-  padding: 28px;
-  box-shadow: 0 28px 90px rgba(0,0,0,0.28);
-}
-
-.auth-modal h2 {
-  margin: 0 0 12px;
-  font-size: 2.2rem;
-  line-height: 1.05;
-  font-weight: 900;
-}
-
-.auth-modal p {
-  margin: 0 0 18px;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.auth-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 42px;
-  height: 42px;
-  border: none;
-  border-radius: 50%;
-  background: #e8dfd2;
-  color: #111;
-  font-size: 22px;
-}
-
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.auth-form input {
-  width: 100%;
-  min-height: 52px;
-  border: 1px solid #d8cec0;
-  border-radius: 14px;
-  background: #fffdf9;
-  padding: 0 16px;
-  outline: none;
-}
-
-.auth-form input:focus {
-  border-color: #111;
-}
-
-.auth-form button[type="submit"] {
-  width: 100%;
-  min-height: 54px;
-  border: none;
-  border-radius: 14px;
-  background: #111;
-  color: #fff;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.auth-link-btn {
-  border: none;
-  background: transparent;
-  color: var(--accent-dark);
-  font-weight: 800;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 6px 0;
-  font-size: 0.95rem;
-}
-
-.auth-message {
-  margin-top: 14px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: #e8f5ea;
-}
-
-.auth-message.error {
-  background: #fde8e8;
-}
-
-.auth-dev-code {
-  padding: 12px 14px;
-  background: var(--surface-soft);
-  border-radius: 12px;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
-/* Password reset — method selector */
-.reset-methods {
-  display: flex;
-  gap: 12px;
-}
-
-.reset-method {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fffdf9;
-  cursor: pointer;
-}
-
-.reset-method.active {
-  border-color: #111;
-  background: #f0ede7;
-  font-weight: 900;
-}
-
-.reset-method input[type="radio"] {
-  width: auto;
-  min-height: auto;
-}
-
-/* Switcher (legacy tabs) */
-.auth-switcher {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.auth-switcher-btn {
-  min-height: 48px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #eee9e1;
-  color: #111;
-  font-weight: 900;
-}
-
-.auth-switcher-btn.active {
-  background: #111;
-  color: #fff;
-  border-color: #111;
-}
-
-/* ===================
-   ACCOUNT PAGE
-   =================== */
 
 .account-page {
   padding: 34px 0 48px;
@@ -187,8 +17,11 @@
 
 .account-title-row h1 {
   margin: 0;
-  font-size: 2rem;
-  font-weight: 900;
+  font-size: 2.2rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  line-height: 1.05;
 }
 
 .account-title-row p {
@@ -213,7 +46,7 @@
 .account-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   padding: 20px;
 }
 
@@ -221,14 +54,24 @@
   border: none;
   background: transparent;
   text-align: left;
-  padding: 11px 0;
-  font-size: 1rem;
-  color: #1f4ed8;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--accent-dark);
   cursor: pointer;
+  border-radius: 999px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.account-menu-link:hover {
+  background: var(--surface-soft);
+  color: var(--text);
 }
 
 .account-menu-link.active {
-  color: #111;
+  background: var(--surface-soft);
+  color: var(--text);
   font-weight: 900;
 }
 
@@ -247,9 +90,12 @@
 }
 
 .account-panel h2 {
-  margin: 0 0 30px;
+  margin: 0 0 28px;
   font-size: 2rem;
-  font-weight: 900;
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  line-height: 1.05;
 }
 
 .account-section {
@@ -257,9 +103,10 @@
 }
 
 .account-section h3 {
-  margin: 0 0 18px;
-  font-size: 1.15rem;
+  margin: 0 0 16px;
+  font-size: 1.1rem;
   font-weight: 900;
+  font-family: var(--font-body);
 }
 
 .account-form-grid {
@@ -275,25 +122,34 @@
 }
 
 .account-field span {
-  color: #8b8172;
-  font-size: 0.95rem;
-  font-weight: 800;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: var(--font-body);
 }
 
 .account-field input {
   width: 100%;
   min-height: 54px;
-  padding: 14px 16px;
-  border: 1px solid #ddd4c7;
-  border-radius: 14px;
-  background: #fffdf9;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
   outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.account-field input:focus {
+  border-color: var(--text);
+  box-shadow: 0 0 0 4px rgba(17,17,17,0.08);
 }
 
 .radio-group {
   display: flex;
   align-items: center;
-  gap: 26px;
+  gap: 24px;
   min-height: 54px;
 }
 
@@ -301,11 +157,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  font-family: var(--font-body);
+  cursor: pointer;
 }
 
 .radio-group input {
   width: auto;
   min-height: auto;
+  accent-color: var(--text);
 }
 
 .account-actions {
@@ -322,19 +181,21 @@
 }
 
 .order-row-title {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 900;
+  font-family: var(--font-body);
   margin-bottom: 6px;
 }
 
 .order-row-meta {
   color: var(--muted);
-  font-size: 0.94rem;
+  font-size: 0.9rem;
 }
 
 .order-row-price {
   font-weight: 900;
   white-space: nowrap;
+  font-family: var(--font-body);
 }
 
 /* --- Responsive --- */
@@ -365,38 +226,25 @@
 }
 
 @media (max-width: 700px) {
-  .auth-modal {
-    width: 100% !important;
-    max-width: none !important;
-    margin: 16px auto !important;
-    padding: 24px !important;
-    border-radius: 24px !important;
-  }
-
-  .auth-modal h2 { font-size: 30px !important; }
-
-  .auth-form input,
-  .auth-form button {
-    min-height: 50px !important;
-  }
-
-  .auth-backdrop {
-    padding: 12px !important;
-    align-items: flex-start !important;
-    overflow-y: auto !important;
-  }
-
   .account-layout {
     grid-template-columns: 1fr !important;
     gap: 18px !important;
-  }
+  }.account-title-row h1 {
+    font-size: 1.8rem !important;
+  
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
 
   .account-sidebar {
     display: flex !important;
     flex-direction: row !important;
     overflow-x: auto !important;
-    gap: 10px !important;
-    padding: 14px !important;
+    gap: 6px !important;
+    padding: 0 0 10px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
     scrollbar-width: none !important;
   }
 
@@ -405,14 +253,27 @@
   .account-menu-link {
     flex: 0 0 auto !important;
     white-space: nowrap !important;
+    padding: 8px 14px !important;
+    font-size: 0.88rem !important;
   }
 
   .account-content {
-    padding: 22px !important;
-    border-radius: 24px !important;
-  }
+    padding: 20px !important;
+    border-radius: 16px !important;
+  }.account-panel h2 {
+    font-size: 1.7rem !important;
+    margin-bottom: 18px !important;
+  
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
 
   .account-form-grid {
     grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }.account-field input {
+    min-height: 48px !important;
+    font-size: 0.95rem !important;
+  font-family: var(--font-body);
   }
 }

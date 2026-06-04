@@ -8,7 +8,7 @@ define('DB_HOST', '127.0.0.1');
 define('DB_NAME', 'tetim');
 define('DB_USER', 'tetim_user');
 define('DB_PASS', 'tetim_pass123');
-define('JWT_SECRET', 'your_super_secret_key_change_me_12345');
+define('JWT_SECRET', 'kIy9rxmvJTTagA4unNwedPkglA5fX609JtylYrSVCkE=');
 define('UPLOAD_DIR', __DIR__ . '/uploads/');   // папка внутри public
 
 error_reporting(E_ALL);
@@ -154,7 +154,7 @@ function createProduct($data) {
     $db = getDB();
     $price = isset($data['price']) && $data['price'] !== '' ? floatval($data['price']) : 0;
     $stock = isset($data['stock']) && $data['stock'] !== '' ? intval($data['stock']) : 0;
-    $stmt = $db->prepare("INSERT INTO products (external_id, article, name, category, price, sizes, stock, image_url, description, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $db->prepare("INSERT INTO products (external_id, article, name, category, price, sizes, stock, image_url, images, description, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([
         $data['external_id'] ?? '',
         $data['article'] ?? '',
@@ -164,6 +164,7 @@ function createProduct($data) {
         $data['sizes'] ?? '',
         $stock,
         $data['image_url'] ?? '',
+        $data['images'] ?? '',
         $data['description'] ?? '',
         isset($data['is_published']) ? (int)$data['is_published'] : 1
     ]);
@@ -173,7 +174,7 @@ function updateProduct($id, $data) {
     $db = getDB();
     $fields = [];
     $params = [];
-    $allowed = ['external_id','article','name','category','price','sizes','stock','image_url','description','is_published'];
+    $allowed = ['external_id','article','name','category','price','sizes','stock','image_url','images','description','is_published'];
     foreach ($data as $key => $value) {
         if (in_array($key, $allowed)) {
             $fields[] = "$key = ?";
@@ -524,6 +525,63 @@ if (!$routeFound && $method === 'PATCH' && preg_match('#^/(api/)?admin/settings$
 }
 if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?admin/upload$#', $uri)) {
     handleUpload();
+    $routeFound = true;
+}
+
+// ── Custom Order Products (public) ──
+if (!$routeFound && $method === 'GET' && preg_match('#^/(api/)?public/custom-order-products$#', $uri)) {
+    $db = getDB();
+    $rows = $db->query("SELECT * FROM custom_order_products WHERE is_active=1 ORDER BY sort_order, id")->fetchAll(PDO::FETCH_ASSOC);
+    sendSuccess(['products' => $rows]);
+    $routeFound = true;
+}
+
+// ── Custom Order Products (admin GET) ──
+if (!$routeFound && $method === 'GET' && preg_match('#^/(api/)?admin/custom-order-products$#', $uri)) {
+    requireAdmin();
+    $db = getDB();
+    $rows = $db->query("SELECT * FROM custom_order_products ORDER BY sort_order, id")->fetchAll(PDO::FETCH_ASSOC);
+    sendSuccess(['products' => $rows]);
+    $routeFound = true;
+}
+
+// ── Custom Order Products (admin POST) ──
+if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?admin/custom-order-products$#', $uri)) {
+    requireAdmin();
+    $db = getDB();
+    $data = getJson();
+    $stmt = $db->prepare("INSERT INTO custom_order_products (key_name,name,category,price_adult_1,price_adult_2,price_adult_3,price_adult_4,price_teen_1,price_teen_2,price_teen_3,price_teen_4,price_kids_1,price_kids_2,price_kids_3,price_kids_4,sort_order,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    $stmt->execute([
+        $data['key_name'] ?? uniqid('product_'),
+        $data['name'], $data['category'] ?? 'tshirts',
+        $data['price_adult_1']??0, $data['price_adult_2']??0, $data['price_adult_3']??0, $data['price_adult_4']??0,
+        $data['price_teen_1']??0, $data['price_teen_2']??0, $data['price_teen_3']??0, $data['price_teen_4']??0,
+        $data['price_kids_1']??0, $data['price_kids_2']??0, $data['price_kids_3']??0, $data['price_kids_4']??0,
+        $data['sort_order']??0, $data['is_active']??1,
+    ]);
+    sendSuccess(['id' => $db->lastInsertId(), 'message' => 'Создано']);
+    $routeFound = true;
+}
+
+// ── Custom Order Products (admin PATCH) ──
+if (!$routeFound && $method === 'PATCH' && preg_match('#^/(api/)?admin/custom-order-products/(\d+)$#', $uri, $m)) {
+    requireAdmin();
+    $db = getDB();
+    $data = getJson();
+    $allowed = ['name','category','price_adult_1','price_adult_2','price_adult_3','price_adult_4','price_teen_1','price_teen_2','price_teen_3','price_teen_4','price_kids_1','price_kids_2','price_kids_3','price_kids_4','sort_order','is_active'];
+    $fields = []; $params = [];
+    foreach ($data as $k => $v) { if (in_array($k, $allowed)) { $fields[] = "$k=?"; $params[] = $v; } }
+    if ($fields) { $params[] = $m[2]; $db->prepare("UPDATE custom_order_products SET ".implode(',',$fields)." WHERE id=?")->execute($params); }
+    sendSuccess(['message' => 'Обновлено']);
+    $routeFound = true;
+}
+
+// ── Custom Order Products (admin DELETE) ──
+if (!$routeFound && $method === 'DELETE' && preg_match('#^/(api/)?admin/custom-order-products/(\d+)$#', $uri, $m)) {
+    requireAdmin();
+    $db = getDB();
+    $db->prepare("DELETE FROM custom_order_products WHERE id=?")->execute([$m[2]]);
+    sendSuccess(['message' => 'Удалено']);
     $routeFound = true;
 }
 

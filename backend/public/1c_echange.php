@@ -3,7 +3,7 @@
 function check1SAuth() {
     // Задайте логин и пароль для 1С (можно из .env)
     $valid_user = '1c_exchange';
-    $valid_pass = 'your_secure_password_here';
+    $valid_pass = 'tetim2026';
     
     if (!isset($_SERVER['PHP_AUTH_USER']) || 
         $_SERVER['PHP_AUTH_USER'] !== $valid_user || 

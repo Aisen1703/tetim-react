@@ -1,0 +1,250 @@
+/* =========================================
+   SEARCH
+   ========================================= */
+
+.search-box {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-box input {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid #e2d5c5;
+  border-radius: 999px;
+  padding: 0 24px;
+  background: #fffaf3;
+  font-size: 17px;
+  outline: none;
+}
+
+.search-box input:focus {
+  border-color: #111;
+}
+
+@media (max-width: 1100px) {
+.search-box {
+    grid-column: 1 / -1;
+    order: 4;
+  }
+
+  
+}
+.search-box input {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  padding: 0 24px;
+  outline: none;
+}
+
+.search-box input::placeholder {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.search-box input:focus {
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.search-box input {
+  background: #fffaf2;
+  border: 1px solid #d9c7ae;
+}
+
+.search-box input:focus {
+  border-color: #d29a34;
+  box-shadow: 0 0 0 4px rgba(210, 154, 52, 0.16);
+}
+
+.search-box input {
+  min-height: 54px !important;
+  background: #fffaf2 !important;
+  color: #111111 !important;
+  border: 1px solid #d9c7ae !important;
+  border-radius: 999px !important;
+  padding: 0 24px !important;
+}
+
+.search-box input::placeholder {
+  color: #8b8172 !important;
+}
+
+@media (max-width: 900px) {
+.catalog-button,
+  .search-box input,
+  .account-mini,
+  .cart-link {
+    width: 100% !important;
+  }
+
+}
+.search-box input {
+  width: 100%;
+  min-height: 54px !important;
+  background: #fffaf2 !important;
+  color: #111111 !important;
+  border: 1px solid #d9c7ae !important;
+  border-radius: 999px !important;
+  padding: 0 24px !important;
+}
+
+.search-box input::placeholder {
+  color: #8b8172 !important;
+}
+
+@media (max-width: 900px) {
+.catalog-button,
+  .search-box input,
+  .account-mini,
+  .cart-link {
+    width: 100% !important;
+  }
+
+  
+}
+.search-box input {
+  width: 100% !important;
+  min-height: 50px !important;
+  border-radius: 999px !important;
+  border: 1px solid #d9c7ae !important;
+  background: #fffaf2 !important;
+  color: #111111 !important;
+  padding: 0 22px !important;
+}
+
+.search-box input::placeholder {
+  color: #8b8172 !important;
+}
+
+@media (max-width: 700px) {
+.catalog-button,
+  .search-box input,
+  .account-mini,
+  .cart-link {
+    width: 100% !important;
+  }
+
+  
+}
+.search-box-with-preview {
+  position: relative;
+  z-index: 50;
+}
+
+.search-preview {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 10px);
+  background: #fffaf2;
+  border: 1px solid #dccab2;
+  border-radius: 24px;
+  padding: 12px;
+  box-shadow: 0 24px 70px rgba(31, 22, 10, 0.18);
+  display: grid;
+  gap: 8px;
+  z-index: 2000;
+}
+
+.search-preview-title {
+  padding: 8px 10px;
+  color: #7b6d5b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.search-preview-item {
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-preview-item:hover {
+  background: #f1e6d6;
+}
+
+.search-preview-image {
+  width: 58px;
+  height: 68px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #e8e0d3;
+  display: block;
+}
+
+.search-preview-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.search-preview-info {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.search-preview-info strong {
+  color: #111;
+  font-size: 15px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-preview-info small {
+  color: #777;
+  font-size: 12px;
+}
+
+.search-preview-item b {
+  color: #111;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.search-preview-all {
+  border: 0;
+  border-radius: 999px;
+  background: #111;
+  color: #fff;
+  padding: 13px 16px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.search-preview-empty {
+  padding: 18px;
+  text-align: center;
+  color: #777;
+  font-weight: 900;
+}
+
+@media (max-width: 700px) {
+.search-preview {
+    position: static;
+    margin-top: 10px;
+  }
+
+  .search-preview-item {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .search-preview-item b {
+    grid-column: 2;
+  }
+
+}

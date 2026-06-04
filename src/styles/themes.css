@@ -1,10 +1,199 @@
 /* =========================================
-   THEMES — праздничные темы сайта
-   Управляются через useSiteSettings + body классы
+   THEMES
    ========================================= */
 
-/* --- Body backgrounds --- */
+.builder-top,
+.builder-editor,
+.builder-blocks {
+  background: #fff;
+  border-radius: 28px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.05);
+}
 
+.builder-top {
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.builder-top h2,
+.builder-editor h3 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.builder-top p,
+.builder-editor p {
+  margin: 6px 0 0;
+  color: #777;
+}
+
+.builder-blocks {
+  position: sticky;
+  top: 110px;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 130px);
+  overflow-y: auto;
+}
+
+.builder-blocks-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.builder-blocks-head span {
+  background: #111;
+  color: #fff;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-weight: 900;
+}
+
+.builder-block-card {
+  width: 100%;
+  border: 1px solid #e4d8c8;
+  border-radius: 20px;
+  background: #fffaf3;
+  padding: 16px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+}
+
+.builder-block-card.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+.builder-block-card span {
+  color: #b17800;
+  font-weight: 900;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.builder-block-card.active span,
+.builder-block-card.active small {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.builder-block-card strong {
+  font-size: 18px;
+}
+
+.builder-block-card small {
+  color: #777;
+}
+
+.builder-save-btn {
+  background: #111 !important;
+  color: #fff;
+}
+
+@media (max-width: 1000px) {
+.builder-blocks {
+    position: static;
+    max-height: none;
+  }
+
+  .builder-top,
+  .builder-editor-head {
+    flex-direction: column;
+  }
+
+  
+}
+.builder-color-field {
+  min-width: 0;
+}
+
+.builder-color-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 46px;
+  gap: 10px;
+  align-items: center;
+}
+
+.builder-color-row input[type='color'] {
+  width: 56px;
+  height: 52px;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid #e4d8c8;
+  background: #fff;
+  cursor: pointer;
+}
+
+.builder-color-row input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.builder-color-row input[type='color']::-webkit-color-swatch {
+  border: 0;
+  border-radius: 10px;
+}
+
+.builder-color-row input[type='color']::-moz-color-swatch {
+  border: 0;
+  border-radius: 10px;
+}
+
+.builder-color-sample {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  border: 1px solid #e4d8c8;
+  box-shadow: inset 0 0 0 4px #fff;
+  display: block;
+}
+
+.builder-slider-preview {
+  display: grid;
+  gap: 14px;
+}
+
+.builder-slider-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.builder-slider-preview-item {
+  height: 160px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #eee;
+}
+
+.builder-slider-preview-item img,
+.builder-slider-preview-item video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 900px) {
+.builder-slides-list,
+  .builder-slider-preview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  
+}
+@media (max-width: 600px) {
+.builder-slides-list,
+  .builder-slider-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  
+}
 body.theme-default {
   background: #f6f3ee;
 }
@@ -23,6 +212,174 @@ body.theme-newyear {
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 28%),
     linear-gradient(180deg, #eef7ff 0%, #f7fbff 42%, #f3eadc 100%);
   background-size: auto, auto, cover;
+}
+
+body.theme-newyear .catalog-button,
+body.theme-newyear .btn-dark,
+body.theme-newyear .cart-link {
+  background: #0f2f4f !important;
+  color: #fff !important;
+}
+
+body.theme-newyear .account-mini,
+body.theme-newyear .btn-light {
+  background: #dfefff !important;
+}
+
+body.theme-newyear .pill {
+  background: #dfefff;
+  color: #0f2f4f;
+}
+
+body.theme-newyear.snow-enabled::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.95) 0 2px, transparent 3px),
+    radial-gradient(circle, rgba(255,255,255,0.8) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle, rgba(255,255,255,0.75) 0 1px, transparent 2px);
+  background-size: 120px 120px, 180px 180px, 90px 90px;
+  animation: tetimSnow 18s linear infinite;
+}
+
+body[style*="--decor-image: none"]::after {
+  display: none;
+}
+
+.builder-theme-card {
+  background: #fffaf2;
+  border-radius: 28px;
+  padding: 24px;
+  border: 1px solid rgba(155, 101, 0, 0.1);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.05);
+  display: grid;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.builder-theme-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.builder-theme-head h3 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.builder-theme-head p {
+  margin: 6px 0 0;
+  color: #777;
+}
+
+.builder-theme-head button {
+  border: 0;
+  border-radius: 999px;
+  padding: 14px 20px;
+  background: #111;
+  color: #fff;
+  font-weight: 900;
+}
+
+.builder-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.builder-theme-grid label {
+  display: grid;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.builder-theme-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.builder-theme-grid input,
+.builder-theme-grid select {
+  width: 100%;
+  border: 1px solid #e4d8c8;
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: #fff;
+}
+
+.builder-theme-preview {
+  border-radius: 24px;
+  padding: 26px;
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px dashed #d8c9b7;
+}
+
+.builder-theme-preview img {
+  width: 100%;
+  height: 34px;
+  object-fit: cover;
+  margin-bottom: 24px;
+  border-radius: 10px;
+}
+
+.builder-theme-preview h2 {
+  margin: 0 0 10px;
+  font-size: 34px;
+}
+
+.builder-theme-preview p {
+  margin: 0;
+  color: #666;
+}
+
+.builder-theme-preview.theme-newyear {
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.9), transparent 28%),
+    linear-gradient(135deg, #eef7ff 0%, #ffffff 100%);
+}
+
+.builder-theme-preview.theme-sakha {
+  background:
+    radial-gradient(circle at top left, rgba(210,154,52,0.16), transparent 32%),
+    #fffaf2;
+}
+
+@media (max-width: 800px) {
+.builder-theme-head {
+    flex-direction: column;
+  }
+
+  .builder-theme-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
+/* =========================
+   HOLIDAY THEMES FINAL
+========================= */
+
+body.theme-default {
+  background: #f6f3ee;
+}
+
+body.theme-sakha {
+  background:
+    var(--site-pattern),
+    radial-gradient(circle at top left, rgba(210, 154, 52, 0.14), transparent 34%),
+    linear-gradient(180deg, #f7f0e5 0%, #eee2d1 100%);
+}
+
+body.theme-newyear {
+  background:
+    var(--site-pattern),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 28%),
+    linear-gradient(180deg, #eef7ff 0%, #f7fbff 42%, #f3eadc 100%);
 }
 
 body.theme-defender {
@@ -54,53 +411,23 @@ body.theme-ysyakh {
     linear-gradient(180deg, #fff4cf 0%, #f4e2ad 100%);
 }
 
-/* --- Header per theme --- */
-
-body.theme-newyear .site-header {
-  background: rgba(240, 248, 255, 0.96) !important;
-  border-bottom: 1px solid rgba(40, 94, 140, 0.18) !important;
-}
-
-body.theme-defender .site-header {
-  background: rgba(238, 243, 247, 0.96) !important;
-  border-bottom: 1px solid rgba(30, 70, 120, 0.2) !important;
-}
-
-body.theme-womens .site-header {
-  background: rgba(255, 241, 247, 0.96) !important;
-  border-bottom: 1px solid rgba(210, 90, 140, 0.22) !important;
-}
-
-body.theme-ysyakh .site-header {
-  background: rgba(255, 244, 207, 0.96) !important;
-  border-bottom: 1px solid rgba(210, 154, 52, 0.28) !important;
-}
-
-/* --- Buttons per theme --- */
-
 body.theme-newyear .catalog-button,
 body.theme-newyear .btn-dark,
-body.theme-newyear .cart-link,
-body.theme-newyear .header-catalog-btn,
-body.theme-newyear .header-cart-btn {
+body.theme-newyear .cart-link {
   background: #0f2f4f !important;
   color: #fff !important;
 }
 
 body.theme-defender .catalog-button,
 body.theme-defender .btn-dark,
-body.theme-defender .cart-link,
-body.theme-defender .header-catalog-btn,
-body.theme-defender .header-cart-btn {
+body.theme-defender .cart-link {
   background: #173b63 !important;
   color: #fff !important;
 }
 
 body.theme-womens .catalog-button,
 body.theme-womens .btn-dark,
-body.theme-womens .cart-link,
-body.theme-womens .header-catalog-btn,
-body.theme-womens .header-cart-btn {
+body.theme-womens .cart-link {
   background: #a83b6a !important;
   color: #fff !important;
 }
@@ -117,38 +444,6 @@ body.theme-sakha-statehood .cart-link {
   background: #111111 !important;
   color: #fff !important;
 }
-
-/* --- Cards per theme --- */
-
-body.theme-newyear .hero-content-card,
-body.theme-newyear .product-card,
-body.theme-newyear .card-lite {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(40, 94, 140, 0.12);
-}
-
-body.theme-womens .hero-content-card,
-body.theme-womens .product-card,
-body.theme-womens .card-lite {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(210, 90, 140, 0.12);
-}
-
-body.theme-ysyakh .hero-content-card,
-body.theme-ysyakh .product-card,
-body.theme-ysyakh .card-lite {
-  background: rgba(255, 250, 230, 0.94);
-  border: 1px solid rgba(210, 154, 52, 0.16);
-}
-
-/* --- Newyear account mini --- */
-
-body.theme-newyear .account-mini,
-body.theme-newyear .btn-light {
-  background: #dfefff !important;
-}
-
-/* --- Pills per theme --- */
 
 body.theme-newyear .pill {
   background: #dfefff;
@@ -172,36 +467,6 @@ body.theme-sakha-statehood .pill {
   color: #9b6500;
 }
 
-/* --- Footer per theme --- */
-
-body.theme-newyear .footer-mega {
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 30%),
-    linear-gradient(135deg, #071a2c 0%, #0f2f4f 55%, #153d64 100%);
-}
-
-body.theme-defender .footer-mega {
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 30%),
-    linear-gradient(135deg, #081d34 0%, #173b63 60%, #0f2a48 100%);
-}
-
-body.theme-womens .footer-mega {
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 30%),
-    linear-gradient(135deg, #421425 0%, #a83b6a 60%, #5c1d35 100%);
-}
-
-body.theme-ysyakh .footer-mega,
-body.theme-sakha-republic .footer-mega,
-body.theme-sakha-statehood .footer-mega {
-  background:
-    radial-gradient(circle at top left, rgba(210, 154, 52, 0.22), transparent 34%),
-    linear-gradient(135deg, #111111 0%, #1d1710 48%, #3a2710 100%);
-}
-
-/* --- Snow (New Year) --- */
-
 body.theme-newyear.snow-enabled::before {
   content: "";
   position: fixed;
@@ -217,29 +482,216 @@ body.theme-newyear.snow-enabled::before {
   animation: tetimSnow 18s linear infinite;
 }
 
-@keyframes tetimSnow {
-  from { background-position: 0 -120px, 40px -180px, 20px -90px; }
-  to   { background-position: 0  120px, 40px  180px, 20px  90px; }
-}
-
-/* --- Decor image (from admin settings) --- */
-
-body::after {
-  content: "";
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  width: 120px;
-  height: 120px;
-  background-image: var(--decor-image);
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  pointer-events: none;
-  z-index: 998;
-  opacity: 0.95;
-}
-
 body[style*="--decor-image: none"]::after {
   display: none;
+}
+
+/* Builder holiday date fields */
+.builder-holiday-dates {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px dashed #d8c9b7;
+  border-radius: 22px;
+  background: #fffaf2;
+}
+
+.builder-holiday-dates > strong {
+  font-size: 18px;
+}
+
+.builder-holiday-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.builder-holiday-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.builder-holiday-grid input {
+  width: 100%;
+  border: 1px solid #e4d8c8;
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: #fff;
+}
+
+@media (max-width: 700px) {
+.builder-holiday-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
+.builder-panel,
+.builder-top,
+.builder-add-actions {
+  position: relative;
+  z-index: 20;
+}
+
+.builder-panel,
+.builder-top,
+.builder-add-actions {
+  position: relative;
+  z-index: 20;
+}
+
+.builder-blocks-list {
+  background: #ffffff !important;
+  border-radius: 28px !important;
+  padding: 24px !important;
+  box-shadow: 0 20px 60px rgba(25, 18, 8, 0.06) !important;
+}
+
+.builder-blocks-list h3 {
+  margin: 0 0 18px !important;
+  font-size: 22px !important;
+  font-weight: 900 !important;
+  color: #111111 !important;
+}
+
+.builder-block-item {
+  width: 100% !important;
+  border: 1px solid #e4d8c8 !important;
+  border-radius: 18px !important;
+  background: #fffaf2 !important;
+  color: #111111 !important;
+  padding: 16px 18px !important;
+  margin: 0 0 12px !important;
+  display: grid !important;
+  gap: 6px !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  font-family: inherit !important;
+  box-shadow: none !important;
+}
+
+.builder-block-item strong {
+  display: block !important;
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  color: #111111 !important;
+}
+
+.builder-block-item span {
+  display: block !important;
+  font-size: 13px !important;
+  line-height: 1.25 !important;
+  font-weight: 700 !important;
+  color: #6f675c !important;
+}
+
+.builder-block-item:hover,
+.builder-block-item.active {
+  background: #111111 !important;
+  border-color: #111111 !important;
+  transform: translateY(-1px) !important;
+}
+
+.builder-block-item:hover strong,
+.builder-block-item:hover span,
+.builder-block-item.active strong,
+.builder-block-item.active span {
+  color: #ffffff !important;
+}
+
+.builder-form-grid label,
+.builder-theme-grid label {
+  display: grid !important;
+  gap: 8px !important;
+  font-weight: 900 !important;
+  color: #111111 !important;
+}
+
+.builder-form-grid label span,
+.builder-theme-grid label span {
+  font-size: 15px !important;
+  font-weight: 900 !important;
+}
+
+.builder-inside-section {
+  margin-top: 34px !important;
+  background: #ffffff !important;
+  border-radius: 30px !important;
+  padding: 30px !important;
+  box-shadow: 0 20px 60px rgba(25, 18, 8, 0.07) !important;
+}
+
+.builder-inside-head {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 20px !important;
+  margin-bottom: 24px !important;
+}
+
+.builder-inside-head h2 {
+  margin: 0 !important;
+  font-size: 34px !important;
+  font-weight: 900 !important;
+  color: #111111 !important;
+}
+
+.builder-inside-head p {
+  margin: 8px 0 0 !important;
+  color: #6f675c !important;
+  font-size: 16px !important;
+}
+
+.builder-inside-head span {
+  border-radius: 999px !important;
+  background: #111111 !important;
+  color: #ffffff !important;
+  padding: 12px 18px !important;
+  font-weight: 900 !important;
+}
+
+.builder-inside-head button,
+.builder-add-actions a {
+  min-height: 48px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #111111 !important;
+  color: #ffffff !important;
+  padding: 0 22px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-decoration: none !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+}
+
+.builder-inside-form {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  margin-bottom: 26px !important;
+}
+
+@media (max-width: 1000px) {
+.builder-inside-form,
+  .builder-slide-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .builder-inside-head {
+    flex-direction: column !important;
+  }
+
+}
+@media (max-width: 700px) {
+.builder-blocks-list,
+  .builder-editor,
+  .builder-inside-section {
+    padding: 20px !important;
+    border-radius: 24px !important;
+  }
+
+  
 }
