@@ -3322,3 +3322,34 @@
   color: #d29a34;
   font-weight: 900;
 }
+/* === Карточки в каталоге — компактнее, без выбора размера === */
+
+.products-grid .product-card {
+  min-height: 380px !important;
+}
+
+.products-grid .product-image {
+  height: 200px !important;
+}
+
+.products-grid .product-size-box {
+  display: none !important;
+}
+
+.products-grid .product-info h3 {
+  font-size: 16px !important;
+  margin-bottom: 6px !important;
+}
+
+.products-grid .product-info {
+  padding: 12px 14px 6px !important;
+}
+
+.products-grid .product-card-bottom {
+  padding: 10px 14px 14px !important;
+}
+
+.products-grid .product-price,
+.products-grid .product-card-bottom strong {
+  font-size: 1rem !important;
+}

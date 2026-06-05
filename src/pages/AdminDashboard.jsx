@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const DEFAULT_CATEGORIES = [];
 
-const SIZES = ['2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL'];
+const SIZES = ['2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 const EMPTY_PRODUCT = { external_id: '', article: '', name: '', category: 'accessories', price: '', sizes: '', stock: '', image_url: '', images: '', description: '' };
 const DEFAULT_THEME = {
   site_title: 'TETIM', logo_url: '/assets/logo-full.png', logo_white_url: '/assets/logo-full-white.png',
@@ -59,6 +59,10 @@ export default function AdminDashboard() {
   const [productForm, setProductForm] = useState(EMPTY_PRODUCT);
   const [editProduct, setEditProduct] = useState(null);
   const [productSearch, setProductSearch] = useState('');
+  const [filterStock, setFilterStock] = useState('all');
+  const [filterPublished, setFilterPublished] = useState('all');
+  const [filterPrice, setFilterPrice] = useState('all');
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [builderSection, setBuilderSection] = useState('hero');
   const [slideForm, setSlideForm] = useState({ title: '', image_url: '', media_type: 'image', sort_order: 0 });
 
@@ -256,9 +260,53 @@ export default function AdminDashboard() {
 
   const filteredProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(p => String(p.name||'').toLowerCase().includes(q) || String(p.article||'').toLowerCase().includes(q) || String(p.external_id||'').toLowerCase().includes(q));
-  }, [products, productSearch]);
+    return products.filter(p => {
+      if (q && !String(p.name||'').toLowerCase().includes(q) && !String(p.article||'').toLowerCase().includes(q) && !String(p.external_id||'').toLowerCase().includes(q)) return false;
+      if (filterStock === 'instock' && Number(p.stock||0) <= 0) return false;
+      if (filterStock === 'zero' && Number(p.stock||0) > 0) return false;
+      if (filterPublished === 'published' && Number(p.is_published) !== 1) return false;
+      if (filterPublished === 'draft' && Number(p.is_published) === 1) return false;
+      if (filterPrice === 'withprice' && Number(p.price||0) <= 0) return false;
+      if (filterPrice === 'noprice' && Number(p.price||0) > 0) return false;
+      return true;
+    });
+  }, [products, productSearch, filterStock, filterPublished, filterPrice]);
+
+  const toggleSelect = (id) => setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const selectAll = () => setSelectedIds(new Set(filteredProducts.map(p => p.id)));
+  const selectNone = () => setSelectedIds(new Set());
+  const allSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p.id));
+
+  async function bulkPublish(publish) {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    const ep = publish ? 'publish' : 'unpublish';
+    await Promise.all(ids.map(id => req(`${API_URL}/admin/products/${id}/${ep}`, { method: 'PATCH', headers })));
+    showToast(publish ? `Опубликовано: ${ids.length}` : `Снято: ${ids.length}`);
+    setSelectedIds(new Set());
+    const { r, d } = await req(`${API_URL}/admin/products`, { headers: getHeaders() });
+    if (r.ok) setProducts(d.products || []);
+  }
+
+  async function bulkDelete() {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    await Promise.all(ids.map(id => req(`${API_URL}/admin/products/${id}`, { method: 'DELETE', headers })));
+    showToast(`Удалено: ${ids.length}`);
+    setSelectedIds(new Set());
+    setProducts(prev => prev.filter(p => !ids.includes(p.id)));
+    setConfirm(null);
+  }
+
+  async function bulkSetCategory(category) {
+    const ids = [...selectedIds];
+    if (!ids.length || !category) return;
+    await Promise.all(ids.map(id => req(`${API_URL}/admin/products/${id}`, { method: 'PATCH', headers, body: JSON.stringify({ category }) })));
+    showToast(`Категория изменена: ${ids.length} товаров`);
+    setSelectedIds(new Set());
+    const { r, d } = await req(`${API_URL}/admin/products`, { headers: getHeaders() });
+    if (r.ok) setProducts(d.products || []);
+  }
 
   const stats = useMemo(() => ({
     total: products.length,
@@ -458,10 +506,53 @@ export default function AdminDashboard() {
                   <h2 className="ad-card-title">Список товаров</h2>
                   <input className="ad-search" value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder="Поиск..." />
                 </div>
+                <div className="ad-filters">
+                  <select className="ad-filter-sel" value={filterStock} onChange={e => setFilterStock(e.target.value)}>
+                    <option value="all">Все остатки</option>
+                    <option value="instock">Есть в наличии</option>
+                    <option value="zero">Нет в наличии</option>
+                  </select>
+                  <select className="ad-filter-sel" value={filterPublished} onChange={e => setFilterPublished(e.target.value)}>
+                    <option value="all">Все статусы</option>
+                    <option value="published">Опубликованные</option>
+                    <option value="draft">Черновики</option>
+                  </select>
+                  <select className="ad-filter-sel" value={filterPrice} onChange={e => setFilterPrice(e.target.value)}>
+                    <option value="all">Все цены</option>
+                    <option value="withprice">С ценой</option>
+                    <option value="noprice">Без цены</option>
+                  </select>
+                  {(filterStock !== 'all' || filterPublished !== 'all' || filterPrice !== 'all' || productSearch) && (
+                    <button type="button" className="ad-filter-reset" onClick={() => { setFilterStock('all'); setFilterPublished('all'); setFilterPrice('all'); setProductSearch(''); }}>✕ Сбросить</button>
+                  )}
+                  <span className="ad-filter-count">{filteredProducts.length} из {products.length}</span>
+                </div>
+                {selectedIds.size > 0 && (
+                  <div className="ad-bulk-bar">
+                    <span className="ad-bulk-count">Выбрано: {selectedIds.size}</span>
+                    <button type="button" className="ad-btn-sm" onClick={() => bulkPublish(true)}>↑ Опубликовать</button>
+                    <button type="button" className="ad-btn-sm" onClick={() => bulkPublish(false)}>↓ Снять</button>
+                    <select className="ad-filter-sel" defaultValue="" onChange={e => { if (e.target.value) { bulkSetCategory(e.target.value); e.target.value = ''; } }}>
+                      <option value="" disabled>Сменить категорию...</option>
+                      {categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                    <button type="button" className="ad-btn-sm ad-btn-sm--del" onClick={() => setConfirm({ title: `Удалить ${selectedIds.size} товаров?`, text: 'Это действие нельзя отменить', onConfirm: async () => { await bulkDelete(); } })}>✕ Удалить</button>
+                    <button type="button" className="ad-filter-reset" onClick={selectNone}>Отменить выбор</button>
+                  </div>
+                )}
                 {filteredProducts.length === 0 ? <div className="ad-nil">Товаров пока нет</div> :
                   <div className="ad-prod-list">
+                    <div className="ad-prod-row ad-prod-row--header">
+                      <label className="ad-checkbox">
+                        <input type="checkbox" checked={allSelected} onChange={() => allSelected ? selectNone() : selectAll()} />
+                        <span>{allSelected ? 'Снять всё' : 'Выбрать всё'}</span>
+                      </label>
+                    </div>
                     {filteredProducts.map(p => (
-                      <div key={p.id} className="ad-prod-row">
+                      <div key={p.id} className={`ad-prod-row${selectedIds.has(p.id) ? ' ad-prod-row--selected' : ''}`}>
+                        <label className="ad-checkbox ad-checkbox--only">
+                          <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
+                        </label>
                         <div className="ad-prod-pic">{p.image_url ? <img src={getImg(p.image_url)} alt={p.name} /> : <span>—</span>}</div>
                         <div className="ad-prod-info">
                           <strong>{p.name}</strong>
@@ -1055,7 +1146,7 @@ export default function AdminDashboard() {
             <h3>{confirm.title}</h3>
             {confirm.text && <p>{confirm.text}</p>}
             <div className="ad-confirm-ft">
-              <button type="button" className="ad-btn-danger" onClick={confirm.onConfirm}>Подтвердить</button>
+              <button type="button" className="ad-btn-danger" onClick={async () => { await confirm.onConfirm(); setConfirm(null); }}>Подтвердить</button>
               <button type="button" className="ad-btn-ghost" onClick={() => setConfirm(null)}>Отмена</button>
             </div>
           </div>

@@ -21,6 +21,8 @@ function getCatsFromStorage() {
   return DEFAULT_CATS;
 }
 
+const SIZES = ['2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+
 async function safeJson(r) { try { return await r.json(); } catch { return {}; } }
 
 export default function Catalog() {
@@ -31,6 +33,7 @@ export default function Catalog() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState(getCatsFromStorage);
   const [activeCategory, setActiveCategory] = useState(categoryFromUrl);
+  const [activeSize, setActiveSize] = useState('all');
   const [searchText, setSearchText] = useState(searchFromUrl);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -86,9 +89,18 @@ export default function Catalog() {
         String(product.article || '').toLowerCase().includes(q) ||
         String(product.external_id || '').toLowerCase().includes(q) ||
         String(product.description || '').toLowerCase().includes(q);
-      return matchCat && matchSearch;
+      const matchSize = activeSize === 'all' || (() => {
+        const sizes = String(product.sizes || '');
+        if (!sizes) return true;
+        return sizes.split(',').some(part => {
+          const s = part.trim().split(':')[0].trim().toUpperCase();
+          const stock = Number((part.trim().split(':')[1] || '1'));
+          return s === activeSize && stock > 0;
+        });
+      })();
+      return matchCat && matchSearch && matchSize;
     });
-  }, [products, activeCategory, searchText]);
+  }, [products, activeCategory, searchText, activeSize]);
 
   return (
     <>
@@ -114,6 +126,26 @@ export default function Catalog() {
                   onClick={() => changeCategory(cat.value)}
                 >
                   {cat.label}
+                </button>
+              ))}
+            </div>
+            <h2 style={{ marginTop: '24px' }}>Размер</h2>
+            <div className="catalog-size-list">
+              <button
+                type="button"
+                className={activeSize === 'all' ? 'catalog-size active' : 'catalog-size'}
+                onClick={() => setActiveSize('all')}
+              >
+                Все
+              </button>
+              {SIZES.map(size => (
+                <button
+                  key={size}
+                  type="button"
+                  className={activeSize === size ? 'catalog-size active' : 'catalog-size'}
+                  onClick={() => setActiveSize(size)}
+                >
+                  {size}
                 </button>
               ))}
             </div>

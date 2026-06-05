@@ -67,7 +67,7 @@ function base64url_decode($data) {
 function generateJWT($payload) {
     $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
     $payload['iat'] = time();
-    $payload['exp'] = time() + 3600;
+    $payload['exp'] = time() + 86400; // 24 часа
     $base64UrlHeader = base64url_encode($header);
     $base64UrlPayload = base64url_encode(json_encode($payload));
     $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, JWT_SECRET, true);

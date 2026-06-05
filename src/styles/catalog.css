@@ -828,3 +828,38 @@
 
   
 }
+
+/* === Фильтр по размеру в сайдбаре === */
+
+.catalog-size-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.catalog-size {
+  height: 34px;
+  min-width: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.catalog-size:hover {
+  background: var(--surface-soft);
+  border-color: var(--text);
+}
+
+.catalog-size.active {
+  background: var(--text);
+  color: #fff;
+  border-color: var(--text);
+}

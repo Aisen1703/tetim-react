@@ -131,7 +131,7 @@ export default function ProductCard({ product }) {
 
   // ===== DERIVED VALUES =====
   const imageUrl = getProductImage(product);
-  const imageUrlWithCache = imageUrl ? `${imageUrl}?t=${Date.now()}` : '';
+  const imageUrlWithCache = imageUrl || '';
   
   const selectedSizeData = useMemo(() => {
     return (

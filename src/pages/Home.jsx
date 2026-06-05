@@ -96,7 +96,9 @@ export default function Home() {
     }
   }
 
-  const hitProducts = products.slice(0, 8);
+  const hitProducts = products
+    .filter(p => Number(p.is_published) === 1 && Number(p.stock || 0) > 0)
+    .slice(0, 4);
 
   return (
     <>

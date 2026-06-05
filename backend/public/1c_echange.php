@@ -215,6 +215,9 @@ function parseOffersXML($xmlPath) {
         $db->prepare("UPDATE products SET is_published=0, stock=0 WHERE external_id NOT IN ($placeholders)")->execute($allIds);
     }
 
+    // Снимаем с публикации товары с нулевым остатком
+    $db->prepare("UPDATE products SET is_published=0 WHERE stock=0 OR stock IS NULL")->execute();
+
     log1C("Предложения: обработано " . count($offers) . ", групп: " . count($groups) . ", обновлено: $updated");
     return true;
 }
@@ -414,6 +417,40 @@ if ($mode === 'import' && $type === 'status') {
     header('Content-Type: text/plain; charset=utf-8');
     if (file_exists($fp) && updateOrderStatusFrom1C($fp)) echo "success\nСтатусы обновлены";
     else echo "failure\nstatus.xml не найден";
+    exit;
+}
+
+// Приём XML заказов от 1С (orders-*.xml)
+if ($mode === 'import' && $type === 'orders') {
+    $filename = $_GET['filename'] ?? '';
+    header('Content-Type: text/plain; charset=utf-8');
+    if ($filename) {
+        $fp = __DIR__ . '/../temp/' . basename($filename);
+        if (file_exists($fp)) {
+            updateOrderStatusFrom1C($fp);
+            log1C("Orders import done: $filename");
+        } else {
+            log1C("Orders import: файл не найден $filename");
+        }
+    }
+    echo "success\norders ok";
+    exit;
+}
+
+// 1С УНФ отправляет выгруженные заказы с type=sale
+if ($mode === 'import' && $type === 'sale') {
+    $filename = $_GET['filename'] ?? '';
+    header('Content-Type: text/plain; charset=utf-8');
+    if ($filename) {
+        $fp = __DIR__ . '/../temp/' . basename($filename);
+        if (file_exists($fp)) {
+            updateOrderStatusFrom1C($fp);
+            log1C("Sale import done: $filename");
+        } else {
+            log1C("Sale import: файл не найден $filename");
+        }
+    }
+    echo "success\nsale ok";
     exit;
 }
 
