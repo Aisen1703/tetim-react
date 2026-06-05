@@ -1,12 +1,9 @@
 <?php
-// Авторизация для 1С (обычно используется HTTP Basic Auth)
 function check1SAuth() {
-    // Задайте логин и пароль для 1С (можно из .env)
     $valid_user = '1c_exchange';
     $valid_pass = 'tetim2026';
-    
-    if (!isset($_SERVER['PHP_AUTH_USER']) || 
-        $_SERVER['PHP_AUTH_USER'] !== $valid_user || 
+    if (!isset($_SERVER['PHP_AUTH_USER']) ||
+        $_SERVER['PHP_AUTH_USER'] !== $valid_user ||
         $_SERVER['PHP_AUTH_PW'] !== $valid_pass) {
         header('WWW-Authenticate: Basic realm="1C Exchange"');
         header('HTTP/1.0 401 Unauthorized');
@@ -14,17 +11,13 @@ function check1SAuth() {
         exit;
     }
 }
-
-// Проверка авторизации при каждом запросе
 check1SAuth();
 
-// Настройки
 define('DB_HOST', '127.0.0.1');
 define('DB_NAME', 'tetim');
 define('DB_USER', 'tetim_user');
 define('DB_PASS', 'tetim_pass123');
 
-// Функция подключения к БД
 function getDB() {
     static $pdo = null;
     if ($pdo === null) {
@@ -39,384 +32,398 @@ function getDB() {
     return $pdo;
 }
 
-// Функция логирования
 function log1C($message) {
     $logDir = __DIR__ . '/../logs/';
     if (!is_dir($logDir)) mkdir($logDir, 0755, true);
-    file_put_contents($logDir . '1c_exchange.log', 
-        date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, 
-        FILE_APPEND);
+    file_put_contents($logDir . '1c_exchange.log',
+        date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
 }
 
-// Парсинг XML файла (обработка каталога товаров)
+function getNsUri($xml) {
+    $namespaces = $xml->getNamespaces(true);
+    foreach ($namespaces as $prefix => $uri) {
+        if ($prefix === '' || strpos($uri, '1C.ru') !== false || strpos($uri, 'commerceml') !== false) {
+            return $uri;
+        }
+    }
+    return '';
+}
+
+function getChild($node, $ns_uri, $tag) {
+    if ($ns_uri) {
+        $children = $node->children($ns_uri);
+        if (isset($children->$tag)) return $children->$tag;
+    }
+    if (isset($node->$tag)) return $node->$tag;
+    return null;
+}
+
 function parseCatalogXML($xmlPath) {
     $xml = simplexml_load_file($xmlPath);
     if (!$xml) return false;
-    
     $db = getDB();
-    $productsCount = 0;
-    
-    // Пространства имён CommerceML
-    $namespaces = $xml->getNamespaces(true);
-    $ns = $namespaces[''] ?? null;
-    
-    // Получаем все товары
-    $products = $xml->xpath('//Товар');
-    
+
+    $ns_uri = getNsUri($xml);
+    if ($ns_uri) $xml->registerXPathNamespace('cm', $ns_uri);
+    $prefix = $ns_uri ? 'cm:' : '';
+
+    $products = $xml->xpath('//' . $prefix . 'Товар');
+    if (empty($products)) $products = $xml->xpath('//Товар');
+    if (empty($products)) { log1C("Товары не найдены в XML"); return true; }
+
+    $count = 0;
     foreach ($products as $product) {
-        $id = (string)$product->Ид;
-        $name = (string)$product->Наименование;
-        $article = (string)$product->Артикул;
-        $description = (string)$product->Описание;
-        
-        // Категория
+        $p = $ns_uri ? $product->children($ns_uri) : $product;
+
+        $id      = (string)($p->Ид ?? $product->Ид ?? '');
+        $name    = (string)($p->Наименование ?? $product->Наименование ?? '');
+        $article = (string)($p->Артикул ?? $product->Артикул ?? '');
+        $desc    = (string)($p->Описание ?? $product->Описание ?? '');
+
         $category = '';
-        if ($product->Группы && $product->Группы->Группа) {
-            $category = (string)$product->Группы->Группа->Ид;
+        $grp = $p->Группы ?? $product->Группы ?? null;
+        if ($grp) {
+            $g = $grp->Группа ?? null;
+            if ($g) {
+                $gc = $ns_uri ? $g->children($ns_uri) : $g;
+                $category = (string)($gc->Ид ?? $g->Ид ?? '');
+            }
         }
-        
-        // Цена
+
         $price = 0;
-        if ($product->Цены && $product->Цены->Цена) {
-            $price = (float)$product->Цены->Цена->ЦенаЗаЕдиницу;
+        $ceny = $p->Цены ?? $product->Цены ?? null;
+        if ($ceny && $ceny->Цена) {
+            $c = $ns_uri ? $ceny->Цена->children($ns_uri) : $ceny->Цена;
+            $price = (float)($c->ЦенаЗаЕдиницу ?? $ceny->Цена->ЦенаЗаЕдиницу ?? 0);
         }
-        
-        // Остатки (из offers.xml обработаем отдельно, здесь только базовые данные)
-        
-        // Проверяем, существует ли товар с таким external_id
+
+        if (!$id) continue;
+
         $stmt = $db->prepare("SELECT id FROM products WHERE external_id = ?");
         $stmt->execute([$id]);
         $existing = $stmt->fetch();
-        
+
         if ($existing) {
-            // Обновляем существующий товар
-            $stmt = $db->prepare("UPDATE products SET 
-                name = ?, article = ?, description = ?, category = ?, price = ?, 
-                updated_at = NOW() WHERE external_id = ?");
-            $stmt->execute([$name, $article, $description, $category, $price, $id]);
+            $stmt = $db->prepare("UPDATE products SET name=?, article=?, description=?, category=?, updated_at=NOW() WHERE external_id=?");
+            $stmt->execute([$name, $article, $desc, $category, $id]);
         } else {
-            // Создаём новый товар
-            $stmt = $db->prepare("INSERT INTO products 
-                (external_id, name, article, description, category, price, is_published, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, 0, NOW())");
-            $stmt->execute([$id, $name, $article, $description, $category, $price]);
+            $stmt = $db->prepare("INSERT INTO products (external_id, name, article, description, category, price, stock, sizes, is_published, created_at) VALUES (?,?,?,?,?,0,0,'',0,NOW())");
+            $stmt->execute([$id, $name, $article, $desc, $category]);
         }
-        $productsCount++;
+        $count++;
     }
-    
-    log1C("Обработано товаров: $productsCount");
+
+    log1C("Каталог: обработано $count товаров");
     return true;
 }
 
-// Парсинг остатков и цен (offers.xml)
 function parseOffersXML($xmlPath) {
     $xml = simplexml_load_file($xmlPath);
     if (!$xml) return false;
-    
     $db = getDB();
-    $offersCount = 0;
-    
-    // Получаем все предложения
-    $offers = $xml->xpath('//Предложение');
-    
+
+    $ns_uri = getNsUri($xml);
+    if ($ns_uri) $xml->registerXPathNamespace('cm', $ns_uri);
+    $prefix = $ns_uri ? 'cm:' : '';
+
+    $offers = $xml->xpath('//' . $prefix . 'Предложение');
+    if (empty($offers)) $offers = $xml->xpath('//Предложение');
+    if (empty($offers)) { log1C("Предложения не найдены"); return true; }
+
+    $allowed = ['2XS','XS','S','M','L','XL','2XL','3XL','4XL','XXL','XXXL'];
+
+    $groups = [];
+
     foreach ($offers as $offer) {
-        $productId = (string)$offer->Ид;
-        $price = (float)$offer->Цены->Цена->ЦенаЗаЕдиницу;
-        $quantity = (int)$offer->Количество;
-        
-        // Собираем остатки по размерам
-        $sizes = [];
-        if ($offer->Склад && $offer->Склад->Остаток) {
-            // Если в 1C есть остатки по складам с характеристиками
-            foreach ($offer->Склад as $stock) {
-                $size = (string)$stock->Характеристика;
-                $qty = (int)$stock->Остаток;
-                if ($size && $qty > 0) {
-                    $sizes[] = "$size:$qty";
-                }
+        $o_ns = getNsUri($offer);
+        $o = $o_ns ? $offer->children($o_ns) : $offer;
+
+        $id       = (string)($o->Ид ?? $offer->Ид ?? '');
+        $quantity = (int)($o->Количество ?? $offer->Количество ?? 0);
+        $name     = (string)($o->Наименование ?? $offer->Наименование ?? '');
+        $price    = 0;
+
+        $ceny = $o->Цены ?? $offer->Цены ?? null;
+        if ($ceny && $ceny->Цена) {
+            $c = $o_ns ? $ceny->Цена->children($o_ns) : $ceny->Цена;
+            $price = (float)($c->ЦенаЗаЕдиницу ?? $ceny->Цена->ЦенаЗаЕдиницу ?? 0);
+        }
+
+        $size = '';
+        if (preg_match('/\b(2XL|2XS|XXL|XL|XS|S|M|L)\b/i', $name, $mm)) {
+            $size = strtoupper($mm[1]);
+        } elseif (preg_match('/[,(]\s*([A-Z]+)-\d+/i', $name, $mm)) {
+            $cand = strtoupper($mm[1]);
+            if (in_array($cand, $allowed)) $size = $cand;
+        } elseif (preg_match('/размер:\s*([A-Z]+)/iu', $name, $mm)) {
+            $cand = strtoupper($mm[1]);
+            if (in_array($cand, $allowed)) $size = $cand;
+        }
+
+        $base = preg_replace('/\s*[,(]\s*(?:[^,()]*?)?(?:2XL|2XS|XXL|XL|XS|S|M|L)(?:-\d+)?\s*\)?[\s,]*$/iu', '', $name);
+        $base = preg_replace('/\s*\(размер:.*?\)/iu', '', $base);
+        $base = trim($base, " \t\n\r\0\x0B(),");
+        if (!$base) $base = $name;
+
+        if (!isset($groups[$base])) {
+            $groups[$base] = ['ids' => [], 'price' => 0, 'sizes' => [], 'stock' => 0];
+        }
+        if (!in_array($id, $groups[$base]['ids'])) {
+            $groups[$base]['ids'][] = $id;
+        }
+        if ($price > 0) $groups[$base]['price'] = $price;
+        $groups[$base]['stock'] += $quantity;
+        if ($size && $quantity >= 0) {
+            $groups[$base]['sizes'][$size] = ($groups[$base]['sizes'][$size] ?? 0) + $quantity;
+        }
+    }
+
+    $updated = 0;
+    foreach ($groups as $base => $data) {
+        if ($data['stock'] <= 0) continue;
+
+        $sizesStr = '';
+        if (!empty($data['sizes'])) {
+            $parts = [];
+            foreach ($data['sizes'] as $sz => $qty) {
+                if ($qty > 0) $parts[] = "$sz:$qty";
+            }
+            $sizesStr = implode(', ', $parts);
+        }
+
+        foreach ($data['ids'] as $eid) {
+            $stmt = $db->prepare("SELECT id FROM products WHERE external_id=? LIMIT 1");
+            $stmt->execute([$eid]);
+            $row = $stmt->fetch();
+            if ($row) {
+                $stmt2 = $db->prepare("UPDATE products SET price=?, stock=?, sizes=?, updated_at=NOW() WHERE id=?");
+                $stmt2->execute([$data['price'], $data['stock'], $sizesStr, $row['id']]);
+                $updated++;
+                break;
             }
         }
-        
-        $sizesString = implode(', ', $sizes);
-        $totalStock = $quantity;
-        
-        // Обновляем товар
-        $stmt = $db->prepare("UPDATE products SET 
-            price = ?, stock = ?, sizes = ?, updated_at = NOW() 
-            WHERE external_id = ?");
-        $stmt->execute([$price, $totalStock, $sizesString, $productId]);
-        
-        // Также публикуем товар при наличии остатков
-        if ($totalStock > 0) {
-            $stmt = $db->prepare("UPDATE products SET is_published = 1 WHERE external_id = ?");
-            $stmt->execute([$productId]);
-        }
-        
-        $offersCount++;
     }
-    
-    log1C("Обработано предложений: $offersCount");
+
+    $allIds = [];
+    foreach ($groups as $data) {
+        if ($data['stock'] > 0) {
+            foreach ($data['ids'] as $eid) $allIds[] = $eid;
+        }
+    }
+    if (!empty($allIds)) {
+        $placeholders = implode(',', array_fill(0, count($allIds), '?'));
+        $db->prepare("UPDATE products SET is_published=0, stock=0 WHERE external_id NOT IN ($placeholders)")->execute($allIds);
+    }
+
+    log1C("Предложения: обработано " . count($offers) . ", групп: " . count($groups) . ", обновлено: $updated");
     return true;
 }
 
-// Выгрузка заказов в 1С
 function exportOrdersToXML() {
     $db = getDB();
-    
-    // Получаем заказы, которые ещё не выгружены в 1С
-    $stmt = $db->query("SELECT * FROM orders WHERE exported_to_1c = 0 AND status != 'cancelled' ORDER BY id");
+    $stmt = $db->query("SELECT * FROM orders WHERE exported_to_1c=0 AND status!='cancelled' ORDER BY id");
     $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    if (empty($orders)) {
-        log1C("Нет новых заказов для выгрузки");
-        return null;
-    }
-    
-    // Формируем XML
-    $xml = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><КоммерческаяИнформация></КоммерческаяИнформация>');
-    $xml->addAttribute('ВерсияСхемы', '2.05');
-    $xml->addAttribute('ДатаФормирования', date('Y-m-d H:i:s'));
-    
-    $docs = $xml->addChild('Документы');
-    
+    if (empty($orders)) { log1C("Нет новых заказов"); return null; }
+
+    // БЕЗ xmlns — пространство имён ломает парсинг заказов в 1С УНФ
+    $xmlStr = '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<КоммерческаяИнформация ВерсияСхемы="2.09" ДатаФормирования="'
+            . date('Y-m-d') . 'T' . date('H:i:s') . '"></КоммерческаяИнформация>';
+    $xml = new SimpleXMLElement($xmlStr);
+
     foreach ($orders as $order) {
-        $doc = $docs->addChild('Документ');
-        $doc->addChild('Ид', $order['id']);
-        $doc->addChild('Номер', $order['id']);
+        // <Документ> прямо в <КоммерческаяИнформация>, без обёртки <Документы>
+        $doc = $xml->addChild('Документ');
+        $doc->addChild('Ид', 'ЗАКАЗ-' . $order['id']);
+        $doc->addChild('Номер', (string)$order['id']);
         $doc->addChild('Дата', date('Y-m-d', strtotime($order['created_at'])));
         $doc->addChild('ХозОперация', 'Заказ товара');
         $doc->addChild('Роль', 'Продавец');
         $doc->addChild('Валюта', 'RUB');
         $doc->addChild('Курс', '1');
-        
+
         // Контрагент
-        $contractor = $doc->addChild('Контрагенты')->addChild('Контрагент');
-        $contractor->addChild('Ид', 'КЛИЕНТ_' . $order['id']);
-        $contractor->addChild('Наименование', $order['customer_name']);
-        if ($order['email']) $contractor->addChild('Email', $order['email']);
-        if ($order['phone']) $contractor->addChild('Телефон', $order['phone']);
-        if ($order['address']) $contractor->addChild('АдресРегистрации', $order['address']);
-        
-        // Адрес доставки
-        if ($order['address']) {
-            $address = $doc->addChild('АдресДоставки');
-            $address->addChild('Представление', $order['address']);
+        $kontrs = $doc->addChild('Контрагенты');
+        $kontr  = $kontrs->addChild('Контрагент');
+        $kontr->addChild('Ид', 'КЛИЕНТ-' . $order['id']);
+        $kontr->addChild('Наименование', htmlspecialchars($order['customer_name'] ?? 'Клиент'));
+        $kontr->addChild('Роль', 'Покупатель');
+        $kontr->addChild('ПолноеНаименование', htmlspecialchars($order['customer_name'] ?? 'Клиент'));
+        if (!empty($order['phone'])) {
+            $contacts = $kontr->addChild('Контакты');
+            $c = $contacts->addChild('Контакт');
+            $c->addChild('Тип', 'ТелефонРабочий');
+            $c->addChild('Значение', $order['phone']);
         }
-        
-        // Комментарий
-        if ($order['comment']) {
-            $doc->addChild('Комментарий', $order['comment']);
+        if (!empty($order['address'])) {
+            $addr = $kontr->addChild('АдресРегистрации');
+            $addr->addChild('Представление', htmlspecialchars($order['address']));
         }
-        
-        // Товары в заказе
-        $itemsStmt = $db->prepare("SELECT * FROM order_items WHERE order_id = ?");
+
+        if (!empty($order['comment'])) {
+            $doc->addChild('Комментарий', htmlspecialchars($order['comment']));
+        }
+
+        // Товары
+        $itemsStmt = $db->prepare("SELECT * FROM order_items WHERE order_id=?");
         $itemsStmt->execute([$order['id']]);
         $items = $itemsStmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         $table = $doc->addChild('Товары');
-        $sum = 0;
-        
+        $sum   = 0;
         foreach ($items as $item) {
             $row = $table->addChild('Товар');
-            $row->addChild('Ид', $item['product_id']);
-            $row->addChild('Наименование', $item['product_name']);
-            $row->addChild('ЦенаЗаЕдиницу', $item['price']);
-            $row->addChild('Количество', $item['quantity']);
-            $row->addChild('Сумма', $item['price'] * $item['quantity']);
-            if ($item['size']) {
-                $row->addChild('ХарактеристикаТовара', $item['size']);
+            $row->addChild('Ид', (string)($item['product_id'] ?? ''));
+            $row->addChild('Наименование', htmlspecialchars($item['product_name'] ?? ''));
+            $row->addChild('БазоваяЕдиница', 'шт');
+            $row->addChild('ЦенаЗаЕдиницу', number_format((float)($item['price'] ?? 0), 2, '.', ''));
+            $row->addChild('Количество',     (string)(int)($item['quantity'] ?? 1));
+            $row->addChild('Сумма',          number_format((float)($item['price'] ?? 0) * (int)($item['quantity'] ?? 1), 2, '.', ''));
+            if (!empty($item['size'])) {
+                $xar = $row->addChild('ХарактеристикиТовара');
+                $x   = $xar->addChild('ХарактеристикаТовара');
+                $x->addChild('Наименование', 'Размер');
+                $x->addChild('Значение', $item['size']);
             }
-            $sum += $item['price'] * $item['quantity'];
+            $sum += (float)($item['price'] ?? 0) * (int)($item['quantity'] ?? 1);
         }
-        
-        $doc->addChild('Сумма', $sum);
-        
-        // Помечаем заказ как выгруженный
-        $updateStmt = $db->prepare("UPDATE orders SET exported_to_1c = 1 WHERE id = ?");
-        $updateStmt->execute([$order['id']]);
+
+        $doc->addChild('Сумма', number_format($sum, 2, '.', ''));
+
+        // Реквизиты
+        $revs = $doc->addChild('ЗначенияРеквизитов');
+
+        $r1 = $revs->addChild('ЗначениеРеквизита');
+        $r1->addChild('Наименование', 'ПометкаУдаления');
+        $r1->addChild('Значение', 'false');
+
+        $r2 = $revs->addChild('ЗначениеРеквизита');
+        $r2->addChild('Наименование', 'Проведен');
+        $r2->addChild('Значение', 'false');
+
+        $r3 = $revs->addChild('ЗначениеРеквизита');
+        $r3->addChild('Наименование', 'СтатусЗаказа');
+        $r3->addChild('Значение', 'Новый');
+
+        $db->prepare("UPDATE orders SET exported_to_1c=1 WHERE id=?")->execute([$order['id']]);
     }
-    
+
     log1C("Выгружено заказов: " . count($orders));
-    
-    // Возвращаем XML
-    return $xml->asXML();
+
+    $dom = new DOMDocument('1.0', 'UTF-8');
+    $dom->preserveWhiteSpace = false;
+    $dom->formatOutput = true;
+    $dom->loadXML($xml->asXML());
+    return $dom->saveXML();
 }
 
-// Обновление статусов заказов из 1С
 function updateOrderStatusFrom1C($xmlPath) {
     $xml = simplexml_load_file($xmlPath);
     if (!$xml) return false;
-    
     $db = getDB();
     $statusMap = [
-        'Новый' => 'new',
-        'Подтвержден' => 'processing',
-        'Укомплектован' => 'done',
-        'Отгружен' => 'done',
-        'Отменен' => 'cancelled'
+        'Новый'        => 'new',
+        'Подтвержден'  => 'processing',
+        'Укомплектован'=> 'done',
+        'Отгружен'     => 'done',
+        'Отменен'      => 'cancelled'
     ];
-    
-    $docs = $xml->xpath('//Документ');
-    foreach ($docs as $doc) {
+    foreach ($xml->xpath('//Документ') as $doc) {
         $orderId = (int)$doc->Ид;
-        $status1C = (string)$doc->Статус;
-        $newStatus = $statusMap[$status1C] ?? 'new';
-        
-        $stmt = $db->prepare("UPDATE orders SET status = ? WHERE id = ?");
-        $stmt->execute([$newStatus, $orderId]);
+        $status  = $statusMap[(string)$doc->Статус] ?? 'new';
+        $db->prepare("UPDATE orders SET status=? WHERE id=?")->execute([$status, $orderId]);
     }
-    
-    log1C("Обновлены статусы заказов из 1С");
+    log1C("Статусы обновлены");
     return true;
 }
 
-// Основной обработчик запросов
+// ── Роутер ──────────────────────────────────────────────────────────────────
 $mode = $_GET['mode'] ?? '';
 $type = $_GET['type'] ?? '';
 
-// Протокол обмена (handshake)
 if ($mode === 'checkauth') {
-    // 1С проверяет доступность обмена
     header('Content-Type: text/plain; charset=utf-8');
-    echo "success\n";
-    echo "session_id\n";
-    echo date('Y-m-d H:i:s');
-    log1C("Handshake successful");
+    echo "success\nsession_id\n" . date('Y-m-d H:i:s');
+    log1C("Handshake OK");
     exit;
 }
 
-// Инициализация сессии
 if ($mode === 'init') {
-    // 1С инициирует сессию обмена
     session_id($_GET['session_id'] ?? '');
-    session_start();
-    $_SESSION['zip'] = ($_GET['zip'] === 'yes');
+    @session_start();
+    $_SESSION['zip'] = (($_GET['zip'] ?? '') === 'yes');
     header('Content-Type: text/plain; charset=utf-8');
-    echo "success\n";
-    echo "init";
-    log1C("Session initialized");
+    echo "success\ninit";
     exit;
 }
 
-// Загрузка файла от 1С
 if ($mode === 'file') {
     $filename = $_GET['filename'] ?? '';
     $filepath = __DIR__ . '/../temp/' . $filename;
-    
-    $input = fopen('php://input', 'rb');
+    $dir = dirname($filepath);
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $input  = fopen('php://input', 'rb');
     $output = fopen($filepath, 'wb');
-    
-    while (!feof($input)) {
-        fwrite($output, fread($input, 8192));
-    }
-    
-    fclose($input);
-    fclose($output);
-    
-    // Если файл ZIP, разворачиваем его
-    if ($_SESSION['zip'] && strpos($filename, 'zip') !== false) {
+    while (!feof($input)) fwrite($output, fread($input, 8192));
+    fclose($input); fclose($output);
+    if (!empty($_SESSION['zip']) && strpos($filename, 'zip') !== false) {
         $zip = new ZipArchive();
-        if ($zip->open($filepath) === true) {
-            $zip->extractTo(__DIR__ . '/../temp/');
-            $zip->close();
-        }
+        if ($zip->open($filepath) === true) { $zip->extractTo(dirname($filepath)); $zip->close(); }
     }
-    
     header('Content-Type: text/plain; charset=utf-8');
-    echo "success\n";
-    echo $filename;
-    log1C("File uploaded: $filename");
+    echo "success\n$filename";
+    log1C("File: $filename");
     exit;
 }
 
-// Импорт каталога
 if ($mode === 'import' && $type === 'catalog') {
-    $filepath = __DIR__ . '/../temp/import.xml';
-    
-    if (file_exists($filepath)) {
-        $result = parseCatalogXML($filepath);
-        if ($result) {
-            echo "success\n";
-            echo "Каталог товаров успешно загружен";
-        } else {
-            echo "failure\n";
-            echo "Ошибка разбора XML";
-        }
+    $filename = $_GET['filename'] ?? 'import.xml';
+    header('Content-Type: text/plain; charset=utf-8');
+    if (strpos($filename, 'offers') !== false) {
+        $fp = __DIR__ . '/../temp/offers.xml';
+        if (file_exists($fp) && parseOffersXML($fp)) { echo "success\nОстатки загружены"; }
+        else { echo "failure\noffers.xml не найден"; }
+        log1C("Offers import done (via catalog type)");
     } else {
-        echo "failure\n";
-        echo "Файл import.xml не найден";
+        $fp = __DIR__ . '/../temp/import.xml';
+        if (file_exists($fp) && parseCatalogXML($fp)) { echo "success\nКаталог загружен"; }
+        else { echo "failure\nimport.xml не найден или ошибка"; }
+        log1C("Catalog import done");
     }
-    log1C("Catalog import completed");
     exit;
 }
 
-// Импорт остатков и цен
 if ($mode === 'import' && $type === 'offers') {
-    $filepath = __DIR__ . '/../temp/offers.xml';
-    
-    if (file_exists($filepath)) {
-        $result = parseOffersXML($filepath);
-        if ($result) {
-            echo "success\n";
-            echo "Остатки и цены успешно загружены";
-        } else {
-            echo "failure\n";
-            echo "Ошибка разбора XML";
-        }
-    } else {
-        echo "failure\n";
-        echo "Файл offers.xml не найден";
-    }
-    log1C("Offers import completed");
+    $fp = __DIR__ . '/../temp/offers.xml';
+    header('Content-Type: text/plain; charset=utf-8');
+    if (file_exists($fp) && parseOffersXML($fp)) { echo "success\nОстатки загружены"; }
+    else { echo "failure\noffers.xml не найден или ошибка"; }
+    log1C("Offers import done");
     exit;
 }
 
-// Выгрузка заказов
 if ($mode === 'query') {
     $xml = exportOrdersToXML();
-    if ($xml) {
-        header('Content-Type: text/xml; charset=utf-8');
-        echo $xml;
-    } else {
-        echo "failure\n";
-        echo "Нет заказов для выгрузки";
-    }
+    if ($xml) { header('Content-Type: text/xml; charset=utf-8'); echo $xml; }
+    else { header('Content-Type: text/plain; charset=utf-8'); echo "success\nНет заказов для выгрузки"; }
     exit;
 }
 
-// Обновление статусов
 if ($mode === 'import' && $type === 'status') {
-    $filepath = __DIR__ . '/../temp/status.xml';
-    
-    if (file_exists($filepath)) {
-        $result = updateOrderStatusFrom1C($filepath);
-        if ($result) {
-            echo "success\n";
-            echo "Статусы заказов обновлены";
-        } else {
-            echo "failure\n";
-            echo "Ошибка разбора XML";
-        }
-    } else {
-        echo "failure\n";
-        echo "Файл status.xml не найден";
-    }
+    $fp = __DIR__ . '/../temp/status.xml';
+    header('Content-Type: text/plain; charset=utf-8');
+    if (file_exists($fp) && updateOrderStatusFrom1C($fp)) echo "success\nСтатусы обновлены";
+    else echo "failure\nstatus.xml не найден";
     exit;
 }
 
-// Завершение сессии
 if ($mode === 'complete') {
-    // Очистка временных файлов
     $tempDir = __DIR__ . '/../temp/';
-    if (is_dir($tempDir)) {
-        array_map('unlink', glob($tempDir . '*'));
-    }
-    echo "success\n";
-    echo "Обмен завершён";
-    log1C("Exchange completed");
+    if (is_dir($tempDir)) array_map('unlink', glob($tempDir . '*'));
+    echo "success\nОбмен завершён";
+    log1C("Exchange complete");
     exit;
 }
 
-// Если ничего не подошло
 header('HTTP/1.0 404 Not Found');
 echo "Not Found";
