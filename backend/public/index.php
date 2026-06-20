@@ -9,10 +9,11 @@ define('DB_NAME', 'tetim');
 define('DB_USER', 'tetim_user');
 define('DB_PASS', 'tetim_pass123');
 define('JWT_SECRET', 'kIy9rxmvJTTagA4unNwedPkglA5fX609JtylYrSVCkE=');
-define('UPLOAD_DIR', __DIR__ . '/uploads/');   // папка внутри public
+define('UPLOAD_DIR', __DIR__ . '/uploads/');
+define('SMSRU_API_KEY', '53843292-65DB-0672-8BB8-398019729EDF');
 
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 
 // ----- CORS -----
 header("Access-Control-Allow-Origin: *");
@@ -67,7 +68,7 @@ function base64url_decode($data) {
 function generateJWT($payload) {
     $header = json_encode(['typ' => 'JWT', 'alg' => 'HS256']);
     $payload['iat'] = time();
-    $payload['exp'] = time() + 86400; // 24 часа
+    $payload['exp'] = time() + 86400;
     $base64UrlHeader = base64url_encode($header);
     $base64UrlPayload = base64url_encode(json_encode($payload));
     $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, JWT_SECRET, true);
@@ -121,6 +122,17 @@ function requireAdmin() {
     }
 }
 
+// ----- SMS -----
+function sendSMS($phone, $message) {
+    $apiKey = SMSRU_API_KEY;
+    $smsPhone = preg_replace('/[^0-9]/', '', $phone);
+    $url = "https://sms.ru/sms/send?api_id={$apiKey}&to={$smsPhone}&msg=" . urlencode($message) . "&json=1";
+    $response = @file_get_contents($url);
+    if ($response === false) return false;
+    $result = json_decode($response, true);
+    return isset($result['status']) && $result['status'] === 'OK';
+}
+
 // ----- МОДЕЛИ -----
 function createUser($name, $email, $phone, $password) {
     $db = getDB();
@@ -133,6 +145,12 @@ function findUserByEmail($email) {
     $db = getDB();
     $stmt = $db->prepare("SELECT * FROM users WHERE email = ?");
     $stmt->execute([$email]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+function findUserByPhone($phone) {
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM users WHERE phone = ?");
+    $stmt->execute([$phone]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 function getAllUsers() {
@@ -154,7 +172,7 @@ function createProduct($data) {
     $db = getDB();
     $price = isset($data['price']) && $data['price'] !== '' ? floatval($data['price']) : 0;
     $stock = isset($data['stock']) && $data['stock'] !== '' ? intval($data['stock']) : 0;
-    $stmt = $db->prepare("INSERT INTO products (external_id, article, name, category, price, sizes, stock, image_url, images, description, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt = $db->prepare("INSERT INTO products (external_id, article, name, category, price, sizes, stock, image_url, description, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([
         $data['external_id'] ?? '',
         $data['article'] ?? '',
@@ -164,7 +182,6 @@ function createProduct($data) {
         $data['sizes'] ?? '',
         $stock,
         $data['image_url'] ?? '',
-        $data['images'] ?? '',
         $data['description'] ?? '',
         isset($data['is_published']) ? (int)$data['is_published'] : 1
     ]);
@@ -174,7 +191,7 @@ function updateProduct($id, $data) {
     $db = getDB();
     $fields = [];
     $params = [];
-    $allowed = ['external_id','article','name','category','price','sizes','stock','image_url','images','description','is_published'];
+    $allowed = ['external_id','article','name','category','price','sizes','stock','image_url','description','is_published'];
     foreach ($data as $key => $value) {
         if (in_array($key, $allowed)) {
             $fields[] = "$key = ?";
@@ -280,52 +297,43 @@ function createPageBlock($data) { return 1; }
 function updatePageBlock($id, $data) { return true; }
 function deletePageBlock($id) { return true; }
 function handleUpload() {
-  requireAdmin();
-  
-  if (!isset($_FILES['file'])) {
-    sendError('Поле "file" не найдено в запросе. Проверьте FormData.', 400);
-  }
-
-  $errCode = $_FILES['file']['error'];
-  if ($errCode !== UPLOAD_ERR_OK) {
-    $errors = [
-      UPLOAD_ERR_INI_SIZE => 'Файл превышает upload_max_filesize в php.ini',
-      UPLOAD_ERR_FORM_SIZE => 'Файл превышает MAX_FILE_SIZE в форме',
-      UPLOAD_ERR_PARTIAL => 'Файл загружен частично',
-      UPLOAD_ERR_NO_FILE => 'Файл не был выбран',
-      UPLOAD_ERR_NO_TMP_DIR => 'Отсутствует временная директория',
-      UPLOAD_ERR_CANT_WRITE => 'Нет прав на запись в uploads/',
-      UPLOAD_ERR_EXTENSION => 'Загрузка блокирована расширением PHP',
-    ];
-    sendError($errors[$errCode] ?? 'Ошибка загрузки (код: ' . $errCode . ')', 400);
-  }
-
-  $file = $_FILES['file'];
-  $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-  $allowed = ['jpg','jpeg','png','gif','webp','mp4','mov','avi'];
-  
-  if (!in_array($ext, $allowed)) {
-    sendError('Формат файла не поддерживается. Разрешены: ' . implode(', ', $allowed), 400);
-  }
-
-  if (!is_dir(UPLOAD_DIR)) {
-    if (!mkdir(UPLOAD_DIR, 0775, true)) {
-      sendError('Не удалось создать папку uploads/. Проверьте права владельца.', 500);
+    requireAdmin();
+    if (!isset($_FILES['file'])) {
+        sendError('Поле "file" не найдено в запросе.', 400);
     }
-  }
-
-  $filename = time() . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
-  $target = UPLOAD_DIR . $filename;
-
-  if (move_uploaded_file($file['tmp_name'], $target)) {
-    // Убедитесь, что веб-сервер отдает файлы из /uploads/ корректно
-    $url = '/uploads/' . $filename;
-    $media_type = in_array($ext, ['mp4','mov','avi']) ? 'video' : 'image';
-    sendSuccess(['url' => $url, 'media_type' => $media_type]);
-  } else {
-    sendError('Файл скопирован, но move_uploaded_file вернул false. Проверьте права на папку ' . UPLOAD_DIR, 500);
-  }
+    $errCode = $_FILES['file']['error'];
+    if ($errCode !== UPLOAD_ERR_OK) {
+        $errors = [
+            UPLOAD_ERR_INI_SIZE => 'Файл превышает upload_max_filesize',
+            UPLOAD_ERR_FORM_SIZE => 'Файл превышает MAX_FILE_SIZE',
+            UPLOAD_ERR_PARTIAL => 'Файл загружен частично',
+            UPLOAD_ERR_NO_FILE => 'Файл не был выбран',
+            UPLOAD_ERR_NO_TMP_DIR => 'Отсутствует временная директория',
+            UPLOAD_ERR_CANT_WRITE => 'Нет прав на запись',
+            UPLOAD_ERR_EXTENSION => 'Загрузка блокирована расширением PHP',
+        ];
+        sendError($errors[$errCode] ?? 'Ошибка загрузки (код: ' . $errCode . ')', 400);
+    }
+    $file = $_FILES['file'];
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $allowed = ['jpg','jpeg','png','gif','webp','mp4','mov','avi'];
+    if (!in_array($ext, $allowed)) {
+        sendError('Формат файла не поддерживается.', 400);
+    }
+    if (!is_dir(UPLOAD_DIR)) {
+        mkdir(UPLOAD_DIR, 0775, true);
+    }
+    $filename = time() . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+    $target = UPLOAD_DIR . $filename;
+    if (move_uploaded_file($file['tmp_name'], $target)) {
+        $url = '/uploads/' . $filename;
+        $media_type = in_array($ext, ['mp4','mov','avi']) ? 'video' : 'image';
+        sendSuccess(['url' => $url, 'media_type' => $media_type]);
+    } else {
+        sendError('Ошибка сохранения файла. Проверьте права на папку uploads/', 500);
+    }
 }
+
 // ----- РОУТИНГ -----
 $method = $_SERVER['REQUEST_METHOD'];
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -334,7 +342,7 @@ if ($uri === '') $uri = '/';
 
 $routeFound = false;
 
-// Раздача статических файлов из папки uploads
+// Статические файлы uploads
 if (!$routeFound && preg_match('#^/uploads/(.+)$#', $uri, $matches)) {
     $file = __DIR__ . '/uploads/' . $matches[1];
     if (file_exists($file)) {
@@ -383,17 +391,60 @@ if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?auth/login$#', $
     sendSuccess(['token' => $token, 'user' => $user]);
     $routeFound = true;
 }
+
+// Восстановление пароля
 if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?auth/forgot-password$#', $uri)) {
-    sendSuccess(['message' => 'Код отправлен', 'dev_code' => '123456']);
+    $data = getJsonInput();
+    $login = trim($data['login'] ?? '');
+    if (empty($login)) sendError('Введите номер телефона или email', 400);
+
+    $isEmail = strpos($login, '@') !== false;
+    $field = $isEmail ? 'email' : 'phone';
+
+    $stmt = getDB()->prepare("SELECT * FROM users WHERE $field = ?");
+    $stmt->execute([$login]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) sendError('Пользователь не найден', 404);
+
+    $code = rand(100000, 999999);
+    $expires = date('Y-m-d H:i:s', time() + 600);
+    getDB()->prepare("UPDATE users SET reset_code = ?, reset_code_expires = ? WHERE $field = ?")->execute([$code, $expires, $login]);
+
+    if (!$isEmail) {
+        sendSMS($login, "Ваш код TETIM: $code");
+    }
+
+    sendSuccess(['message' => 'Код отправлен']);
     $routeFound = true;
 }
+
 if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?auth/verify-reset-code$#', $uri)) {
     $data = getJsonInput();
-    if (($data['code'] ?? '') === '123456') sendSuccess(['message' => 'Код подтверждён']);
-    else sendError('Неверный код', 400);
+    $login = trim($data['login'] ?? '');
+    $code = trim($data['code'] ?? '');
+    if (empty($login) || empty($code)) sendError('Логин и код обязательны', 400);
+    $isEmail = strpos($login, '@') !== false;
+    $field = $isEmail ? 'email' : 'phone';
+    $stmt = getDB()->prepare("SELECT * FROM users WHERE $field = ? AND reset_code = ? AND reset_code_expires > NOW()");
+    $stmt->execute([$login, $code]);
+    if (!$stmt->fetch()) sendError('Неверный или истёкший код', 400);
+    sendSuccess(['message' => 'Код подтверждён']);
     $routeFound = true;
 }
+
 if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?auth/reset-password$#', $uri)) {
+    $data = getJsonInput();
+    $login = trim($data['login'] ?? '');
+    $code = trim($data['code'] ?? '');
+    $newPassword = $data['newPassword'] ?? '';
+    if (empty($login) || empty($code) || empty($newPassword)) sendError('Все поля обязательны', 400);
+    $isEmail = strpos($login, '@') !== false;
+    $field = $isEmail ? 'email' : 'phone';
+    $stmt = getDB()->prepare("SELECT * FROM users WHERE $field = ? AND reset_code = ? AND reset_code_expires > NOW()");
+    $stmt->execute([$login, $code]);
+    if (!$stmt->fetch()) sendError('Неверный или истёкший код', 400);
+    $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+    getDB()->prepare("UPDATE users SET password = ?, reset_code = NULL, reset_code_expires = NULL WHERE $field = ?")->execute([$hash, $login]);
     sendSuccess(['message' => 'Пароль изменён']);
     $routeFound = true;
 }
@@ -528,7 +579,7 @@ if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?admin/upload$#',
     $routeFound = true;
 }
 
-// ── Custom Order Products (public) ──
+// Custom Order Products (public)
 if (!$routeFound && $method === 'GET' && preg_match('#^/(api/)?public/custom-order-products$#', $uri)) {
     $db = getDB();
     $rows = $db->query("SELECT * FROM custom_order_products WHERE is_active=1 ORDER BY sort_order, id")->fetchAll(PDO::FETCH_ASSOC);
@@ -536,7 +587,7 @@ if (!$routeFound && $method === 'GET' && preg_match('#^/(api/)?public/custom-ord
     $routeFound = true;
 }
 
-// ── Custom Order Products (admin GET) ──
+// Custom Order Products (admin)
 if (!$routeFound && $method === 'GET' && preg_match('#^/(api/)?admin/custom-order-products$#', $uri)) {
     requireAdmin();
     $db = getDB();
@@ -544,12 +595,10 @@ if (!$routeFound && $method === 'GET' && preg_match('#^/(api/)?admin/custom-orde
     sendSuccess(['products' => $rows]);
     $routeFound = true;
 }
-
-// ── Custom Order Products (admin POST) ──
 if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?admin/custom-order-products$#', $uri)) {
     requireAdmin();
     $db = getDB();
-    $data = getJson();
+    $data = getJsonInput();
     $stmt = $db->prepare("INSERT INTO custom_order_products (key_name,name,category,price_adult_1,price_adult_2,price_adult_3,price_adult_4,price_teen_1,price_teen_2,price_teen_3,price_teen_4,price_kids_1,price_kids_2,price_kids_3,price_kids_4,sort_order,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     $stmt->execute([
         $data['key_name'] ?? uniqid('product_'),
@@ -562,12 +611,10 @@ if (!$routeFound && $method === 'POST' && preg_match('#^/(api/)?admin/custom-ord
     sendSuccess(['id' => $db->lastInsertId(), 'message' => 'Создано']);
     $routeFound = true;
 }
-
-// ── Custom Order Products (admin PATCH) ──
 if (!$routeFound && $method === 'PATCH' && preg_match('#^/(api/)?admin/custom-order-products/(\d+)$#', $uri, $m)) {
     requireAdmin();
     $db = getDB();
-    $data = getJson();
+    $data = getJsonInput();
     $allowed = ['name','category','price_adult_1','price_adult_2','price_adult_3','price_adult_4','price_teen_1','price_teen_2','price_teen_3','price_teen_4','price_kids_1','price_kids_2','price_kids_3','price_kids_4','sort_order','is_active'];
     $fields = []; $params = [];
     foreach ($data as $k => $v) { if (in_array($k, $allowed)) { $fields[] = "$k=?"; $params[] = $v; } }
@@ -575,8 +622,6 @@ if (!$routeFound && $method === 'PATCH' && preg_match('#^/(api/)?admin/custom-or
     sendSuccess(['message' => 'Обновлено']);
     $routeFound = true;
 }
-
-// ── Custom Order Products (admin DELETE) ──
 if (!$routeFound && $method === 'DELETE' && preg_match('#^/(api/)?admin/custom-order-products/(\d+)$#', $uri, $m)) {
     requireAdmin();
     $db = getDB();
