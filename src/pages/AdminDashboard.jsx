@@ -70,6 +70,19 @@ export default function AdminDashboard() {
   const [coForm, setCoForm] = useState({ key_name: '', name: '', category: 'tshirts', price_adult_1: '', price_adult_2: '', price_adult_3: '', price_adult_4: '', price_teen_1: '', price_teen_2: '', price_teen_3: '', price_teen_4: '', price_kids_1: '', price_kids_2: '', price_kids_3: '', price_kids_4: '', sort_order: 0 });
   const [editCoProduct, setEditCoProduct] = useState(null);
 
+  const [mockups, setMockups] = useState([]);
+  const [mockupCategory, setMockupCategory] = useState('tshirts');
+  const [sizeTables, setSizeTables] = useState([]);
+  const [sizeTableCategory, setSizeTableCategory] = useState('tshirts');
+  const MOCKUP_CATS = [
+    { key: 'tshirts',   label: 'Футболки' },
+    { key: 'suits',     label: 'Костюмы' },
+    { key: 'bottoms',   label: 'Шорты / Брюки' },
+    { key: 'outerwear', label: 'Верхняя одежда' },
+    { key: 'vests',     label: 'Жилеты' },
+    { key: 'acc',       label: 'Аксессуары' },
+  ];
+
   const [toast, setToast] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -97,13 +110,15 @@ export default function AdminDashboard() {
   async function loadAll() {
     const h = getHeaders();
     setLoading(true);
-    const [p, o, c, sl, th, co] = await Promise.all([
+    const [p, o, c, sl, th, co, mk, st] = await Promise.all([
       req(`${API_URL}/admin/products`, { headers: h }),
       req(`${API_URL}/admin/orders`, { headers: h }),
       req(`${API_URL}/admin/users`, { headers: h }),
       req(`${API_URL}/admin/slides`, { headers: h }),
       req(`${API_URL}/admin/settings`, { headers: h }),
       req(`${API_URL}/admin/custom-order-products`, { headers: h }),
+      req(`${API_URL}/admin/mockups`, { headers: h }),
+      req(`${API_URL}/admin/size-tables`, { headers: h }),
     ]);
     if (p.r.ok) setProducts(p.d.products || []);
     if (o.r.ok) setOrders(o.d.orders || []);
@@ -111,7 +126,71 @@ export default function AdminDashboard() {
     if (sl.r.ok) setSlides(sl.d.slides || []);
     if (th.r.ok) setThemeSettings({ ...DEFAULT_THEME, ...(th.d.settings || {}) });
     if (co.r.ok) setCoProducts(co.d.products || []);
+    if (mk.r.ok) setMockups(mk.d.mockups || []);
+    if (st.r.ok) setSizeTables(st.d.tables || []);
     setLoading(false);
+  }
+
+  async function uploadSizeTable(e, category) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('category', category);
+        const r = await fetch(`${API_URL}/admin/size-tables`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${localStorage.getItem('token') || token}` },
+          body: fd,
+        });
+        const d = await safeJson(r);
+        if (!r.ok) { showToast(d.message || 'Ошибка загрузки', 'error'); break; }
+      }
+      showToast(`Загружено: ${files.length} таблиц(а)`);
+      const { r, d } = await req(`${API_URL}/admin/size-tables`, { headers: getHeaders() });
+      if (r.ok) setSizeTables(d.tables || []);
+    } catch (err) { showToast(err.message, 'error'); }
+    finally { setUploading(false); e.target.value = ''; }
+  }
+
+  async function deleteSizeTable(id) {
+    const { r, d } = await req(`${API_URL}/admin/size-tables/${id}`, { method: 'DELETE', headers });
+    if (!r.ok) { showToast(d.message || 'Ошибка', 'error'); return; }
+    showToast('Таблица удалена');
+    setSizeTables(prev => prev.filter(t => t.id !== id));
+    setConfirm(null);
+  }
+
+  async function uploadMockup(e, category) {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('category', category);
+        const r = await fetch(`${API_URL}/admin/mockups`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${localStorage.getItem('token') || token}` },
+          body: fd,
+        });
+        const d = await safeJson(r);
+        if (!r.ok) { showToast(d.message || 'Ошибка загрузки', 'error'); break; }
+      }
+      showToast(`Загружено: ${files.length} макет(ов)`);
+      const { r, d } = await req(`${API_URL}/admin/mockups`, { headers: getHeaders() });
+      if (r.ok) setMockups(d.mockups || []);
+    } catch (err) { showToast(err.message, 'error'); }
+    finally { setUploading(false); e.target.value = ''; }
+  }
+
+  async function deleteMockup(id) {
+    const { r, d } = await req(`${API_URL}/admin/mockups/${id}`, { method: 'DELETE', headers });
+    if (!r.ok) { showToast(d.message || 'Ошибка', 'error'); return; }
+    showToast('Макет удалён');
+    setMockups(prev => prev.filter(m => m.id !== id));
+    setConfirm(null);
   }
 
   async function uploadFile(file) {
@@ -360,7 +439,9 @@ export default function AdminDashboard() {
             { key: 'clients',   icon: '⊙',  label: 'Клиенты' },
             { key: 'categories',icon: '◈',  label: 'Категории' },
             { key: 'custom-order', icon: '✦', label: 'Инд. заказ' },
-            { key: 'builder',   icon: '⬕',  label: 'Конструктор' },
+            { key: 'mockups',     icon: '◻',  label: 'Макеты' },
+            { key: 'size-tables', icon: '⊞',  label: 'Размеры' },
+            { key: 'builder',     icon: '⬕',  label: 'Конструктор' },
           ].map(n => (
             <button key={n.key} type="button" className={`ad-nav-item${tab===n.key?' --on':''}`} onClick={() => setTab(n.key)} title={n.label}>
               <span className="ad-nav-ic">{n.icon}</span>
@@ -1071,6 +1152,153 @@ export default function AdminDashboard() {
 
               </div>
             </div>
+          </section>
+        )}
+
+        {/* МАКЕТЫ */}
+        {tab === 'mockups' && (
+          <section className="ad-page">
+            <header className="ad-page-hd">
+              <div>
+                <h1>Макеты</h1>
+                <p>Примеры работ для страницы индивидуального заказа</p>
+              </div>
+            </header>
+
+            {/* Табы категорий */}
+            <div className="ad-mockup-tabs">
+              {MOCKUP_CATS.map(cat => {
+                const count = mockups.filter(m => m.category === cat.key).length;
+                return (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    className={`ad-mockup-tab${mockupCategory === cat.key ? ' --on' : ''}`}
+                    onClick={() => setMockupCategory(cat.key)}
+                  >
+                    {cat.label}
+                    <span className="ad-mockup-tab-cnt">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Загрузка */}
+            <div className="ad-card ad-mockup-upload-card">
+              <label className="ad-drop">
+                <span>⬆</span>
+                <strong>Загрузить макеты — {MOCKUP_CATS.find(c => c.key === mockupCategory)?.label}</strong>
+                <small>Можно выбрать несколько файлов · JPG, PNG, WebP</small>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={uploading}
+                  onChange={e => uploadMockup(e, mockupCategory)}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
+
+            {/* Сетка макетов */}
+            {(() => {
+              const filtered = mockups.filter(m => m.category === mockupCategory);
+              if (filtered.length === 0) return (
+                <div className="ad-nil" style={{ marginTop: 24 }}>
+                  Макетов в этой категории пока нет. Загрузите первый!
+                </div>
+              );
+              return (
+                <div className="ad-mockup-grid">
+                  {filtered.map(m => (
+                    <div key={m.id} className="ad-mockup-item">
+                      <img src={getImg(m.image_url)} alt="" />
+                      <div className="ad-mockup-item-overlay">
+                        <button
+                          type="button"
+                          className="ad-mockup-del"
+                          onClick={() => setConfirm({
+                            title: 'Удалить макет?',
+                            text: 'Изображение будет удалено безвозвратно',
+                            onConfirm: () => deleteMockup(m.id),
+                          })}
+                        >✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </section>
+        )}
+
+        {/* РАЗМЕРНЫЕ ТАБЛИЦЫ */}
+        {tab === 'size-tables' && (
+          <section className="ad-page">
+            <header className="ad-page-hd">
+              <div>
+                <h1>Размерные таблицы</h1>
+                <p>Таблицы размеров для страницы индивидуального заказа</p>
+              </div>
+            </header>
+
+            <div className="ad-mockup-tabs">
+              {MOCKUP_CATS.map(cat => {
+                const count = sizeTables.filter(t => t.category === cat.key).length;
+                return (
+                  <button key={cat.key} type="button"
+                    className={`ad-mockup-tab${sizeTableCategory === cat.key ? ' --on' : ''}`}
+                    onClick={() => setSizeTableCategory(cat.key)}
+                  >
+                    {cat.label}
+                    <span className="ad-mockup-tab-cnt">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="ad-card ad-mockup-upload-card">
+              <label className="ad-drop">
+                <span>⬆</span>
+                <strong>Загрузить таблицы — {MOCKUP_CATS.find(c => c.key === sizeTableCategory)?.label}</strong>
+                <small>Можно выбрать несколько файлов · JPG, PNG, PDF</small>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  multiple
+                  disabled={uploading}
+                  onChange={e => uploadSizeTable(e, sizeTableCategory)}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
+
+            {(() => {
+              const filtered = sizeTables.filter(t => t.category === sizeTableCategory);
+              if (filtered.length === 0) return (
+                <div className="ad-nil" style={{ marginTop: 24 }}>
+                  Таблиц в этой категории пока нет. Загрузите первую!
+                </div>
+              );
+              return (
+                <div className="ad-mockup-grid">
+                  {filtered.map(t => (
+                    <div key={t.id} className="ad-mockup-item ad-sizetable-item">
+                      <img src={getImg(t.image_url)} alt="" />
+                      <div className="ad-mockup-item-overlay">
+                        <button type="button" className="ad-mockup-del"
+                          onClick={() => setConfirm({
+                            title: 'Удалить таблицу?',
+                            text: 'Изображение будет удалено безвозвратно',
+                            onConfirm: () => deleteSizeTable(t.id),
+                          })}
+                        >✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </section>
         )}
 

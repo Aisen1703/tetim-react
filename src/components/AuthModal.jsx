@@ -16,7 +16,7 @@ export default function AuthModal({ isOpen, onClose, onLogin }) {
   const [message, setMessage] = useState('');
 
   const [loginForm, setLoginForm] = useState({
-    email: 'admin@tetim.ru',
+    email: '',
     password: '',
   });
 
