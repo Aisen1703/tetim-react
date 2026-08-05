@@ -8,6 +8,7 @@ import ProductCard from '../components/ProductCard.jsx';
 import useSiteSettings from '../hooks/useSiteSettings.js';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const POPULAR_CATEGORIES = [
   { title: 'Спортивные костюмы', category: 'suits' },
   { title: 'Футболки', category: 'tshirts-longsleeves' },
@@ -18,81 +19,38 @@ const POPULAR_CATEGORIES = [
   { title: 'Аксессуары', category: 'accessories' },
 ];
 
-const categoryLabels = {
-  accessories: 'Аксессуары',
-  sale: 'Акционные товары',
-  'pants-shorts': 'Брюки и Шорты',
-  headwear: 'Головные уборы',
-  sweatshirts: 'Джемпера, свитшоты, толстовки',
-  vests: 'Жилеты',
-  suits: 'Костюмы, комплекты',
-  jackets: 'Пуховики, куртки, ветровки',
-  shirts: 'Рубашки',
-  'tshirts-longsleeves': 'Футболки и Лонгсливы',
-  bags: 'Сумки',
-  backpacks: 'Рюкзаки',
-  caps: 'Кепки',
-  hats: 'Шапки',
-  socks: 'Носки',
-  belts: 'Ремни',
-};
-
-function getCategoryLabel(category) {
-  return categoryLabels[category] || category || 'Категория';
-}
-
 function normalizeProduct(product) {
   return {
     ...product,
     id: Number(product.id),
     product_id: Number(product.id),
-    external_id: product.external_id || '',
-    article: product.article || '',
-    name: product.name || 'Товар',
-    category: product.category || 'accessories',
-    category_label: getCategoryLabel(product.category),
     price: Number(product.price || 0),
-    sizes: product.sizes || '',
     stock: Number(product.stock || 0),
-    image_url:
-      product.image_url ||
-      product.image ||
-      'https://placehold.co/600x720?text=TETIM',
-    description: product.description || '',
+    image_url: product.image_url || product.image || '',
   };
 }
 
 export default function Home() {
   const settings = useSiteSettings();
-
   const [products, setProducts] = useState([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
-  const [productsMessage, setProductsMessage] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadProducts();
   }, []);
 
   async function loadProducts() {
-    setLoadingProducts(true);
-    setProductsMessage('');
-
+    setLoading(true);
     try {
       const response = await fetch(`${API_URL}/public/products`);
       const data = await response.json();
-
-      if (!response.ok) {
-        setProducts([]);
-        setProductsMessage(data.message || 'Не удалось загрузить товары');
-        return;
+      if (response.ok) {
+        setProducts((data.products || []).map(normalizeProduct));
       }
-
-      setProducts((data.products || []).map(normalizeProduct));
     } catch {
       setProducts([]);
-      setProductsMessage('Backend не отвечает. Проверьте server.js');
     } finally {
-      setLoadingProducts(false);
+      setLoading(false);
     }
   }
 
@@ -105,42 +63,41 @@ export default function Home() {
       <Header />
 
       <main>
-        <section className="container hero-section">
-          <HeroSlider />
-
-          <div className="hero-content-card">
+        {/* Hero */}
+        <div className="home-hero">
+          <div className="home-hero-visual">
+            <HeroSlider />
+          </div>
+          <div className="home-hero-copy">
             {settings.hero_badge && (
-              <span className="pill">{settings.hero_badge}</span>
+              <span className="home-badge">{settings.hero_badge}</span>
             )}
-
-            <h1>{settings.hero_title || 'Одежда с характером Севера'}</h1>
-
-            <p>
-              {settings.hero_text ||
-                'Создаём одежду для города, спорта и активной жизни — с вниманием к деталям, комфорту и северному характеру.'}
+            <h1 className="home-hero-title">
+              {settings.hero_title || 'Одежда с характером Севера'}
+            </h1>
+            <p className="home-hero-text">
+              {settings.hero_text || 'Создаём одежду для города, спорта и активной жизни — с вниманием к деталям, комфорту и северному характеру.'}
             </p>
-
-            <div className="hero-actions">
-              <Link to="/catalog" className="btn btn-dark">
-                {settings.hero_button_primary || 'Каталог'}
+            <div className="home-hero-actions">
+              <Link to="/catalog" className="btn-pill">
+                {settings.hero_button_primary || 'Смотреть каталог'}
               </Link>
-
-              <Link to="/custom-order" className="btn btn-light">
+              <Link to="/custom-order" className="btn-pill btn-pill-ghost">
                 {settings.hero_button_secondary || 'Индивидуальный заказ'}
               </Link>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section className="container">
+        {/* Популярные категории */}
+        <section className="container home-section">
           <h2 className="section-title">Популярные категории</h2>
-
-          <div className="popular-categories-grid">
+          <div className="cat-grid">
             {POPULAR_CATEGORIES.map((item) => (
               <Link
                 key={`${item.category}-${item.title}`}
                 to={`/catalog?category=${item.category}`}
-                className="popular-category-card"
+                className="cat-chip"
               >
                 {item.title}
               </Link>
@@ -148,28 +105,27 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="container home-products-section">
+        {/* Хиты продаж */}
+        <section className="container home-section">
           <div className="section-title-row">
-            <h2>Хиты продаж</h2>
-
-            <Link to="/catalog" className="link-accent">
-              Смотреть все
-            </Link>
+            <h2 className="section-title">Хиты продаж</h2>
+            <Link to="/catalog" className="link-accent">Смотреть все →</Link>
           </div>
 
-          {loadingProducts ? (
-            <div className="card-lite">
-              <h3>Загрузка товаров...</h3>
-              <p>Подождите немного.</p>
-            </div>
-          ) : productsMessage ? (
-            <div className="card-lite">
-              <h3>Ошибка загрузки</h3>
-              <p>{productsMessage}</p>
+          {loading ? (
+            <div className="home-products-grid">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="home-skeleton-card">
+                  <div className="home-skeleton-img" />
+                  <div className="home-skeleton-line" />
+                  <div className="home-skeleton-line home-skeleton-line--short" />
+                </div>
+              ))}
             </div>
           ) : hitProducts.length === 0 ? (
-            <div className="card-lite">
-              <h3>Товаров пока нет</h3>
+            <div className="home-empty-state">
+              <div className="home-empty-icon">!</div>
+              <h3>Товары скоро появятся</h3>
               <p>Опубликуйте товары в админ-панели.</p>
             </div>
           ) : (
